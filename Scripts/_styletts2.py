@@ -13,7 +13,9 @@ from text_utils import TextCleaner
 from Utils.PLBERT.util import load_plbert
 from Modules.diffusion.sampler import DiffusionSampler, ADPM2Sampler, KarrasSchedule
 
-from _inference_result import InferenceResult
+from _helper import addNumbersPattern
+
+import numpy as np
 
 class StyleTTS2:
 
@@ -121,12 +123,15 @@ class StyleTTS2:
         # Duration Predictor, frames per phoneme
         d_pred, _ = self.model.predictor.lstm(bert_encoder_with_style)  # Model temporal dependencies between phonemes, LSTM = RNN
         d_pred = self.model.predictor.duration_proj(d_pred)  # Predict how long each phoneme lasts
+
+        # d_pred = torch.nan_to_num(d_pred, nan=0.0, posinf=20.0, neginf=-20.0)
+
         d_pred = torch.sigmoid(d_pred).sum(axis=-1)  # Sum of duration prediction -> Result: Prediction of frame duration
         d_pred = torch.round(d_pred.squeeze()).clamp(min=1)  # Convert duration prediction into integers, add clamp to ensure that each phoneme has at least one frame
         d_pred[-1] += 5  # Makes last phoneme last 5 frames longer, to ensure it not being cut off too fast
 
         # Creates predicted alignment matrix between text (phonemes) and audio frames
-        a_pred = torch.zeros(input_lengths, int(d_pred.sum().data))  # Initializes a matrix with sizes: [# of Phonemes (input_lengths)] x [Sum of total predicted frames]
+        a_pred = torch.zeros(input_lengths.item(), int(d_pred.sum().data))  # Initializes a matrix with sizes: [# of Phonemes (input_lengths)] x [Sum of total predicted frames]
         current_frame = 0
         for i in range(a_pred.size(0)):  # Iterates over phoneme
             a_pred[i, current_frame:current_frame + int(d_pred[i].data)] = 1  # Changes for row-i (the i-th phoneme) all the values from current_frame to current_frame + int(d_pred[i].data) to 1
@@ -151,44 +156,23 @@ class StyleTTS2:
         return style_vector_acoustic, style_vector_prosodic
 
     @torch.no_grad()
-    def run_prediction(
-        self,
-        input_lengths: Tensor,
-        text_mask: Tensor,
-        h_bert: Tensor,
-        h_text: Tensor,
-        style_acoustic: Tensor,
-        style_prosodic: Tensor
-    ):
-        # AdaIN injection
-        h_bert_with_style = self.model.predictor.text_encoder(
-            h_bert, style_acoustic, input_lengths, text_mask
-        )
+    def extract_mixed_embeddings(self, text_gt: str, text_target: str, noise: Tensor, embedding_scale: int, diffusion_steps: int):
+        tokens_gt = self.preprocessText(text_gt)
+        tokens_target = self.preprocessText(text_target)
 
-        # duration
-        a_pred = self.predictDuration(h_bert_with_style, input_lengths)
+        tokens_gt = addNumbersPattern(tokens_gt, tokens_target, [16, 4])
+        assert tokens_gt.shape == tokens_target.shape, "Padding didn't work, ground truth and target are of different dimensions"
 
-        # align
-        h_aligned = h_text @ a_pred.unsqueeze(0).to(self.device)
+        h_text_gt, h_bert_raw_gt, h_bert_gt, input_lengths, text_mask = self.extract_embeddings(tokens_gt)
+        h_text_target, h_bert_raw_target, h_bert_target, _, _ = self.extract_embeddings(tokens_target)
 
-        # per-frame text embedding
-        h_bert_per_frame = (h_bert_with_style.transpose(-1, -2) @ a_pred.unsqueeze(0).to(self.device))
+        style_vector_acoustic, style_vector_prosodic = self.computeStyleVector(noise, h_bert_raw_target, embedding_scale, diffusion_steps)
 
-        # pitch + energy
-        f0_pred, n_pred = self.model.predictor.F0Ntrain(h_bert_per_frame, style_acoustic)
-
-        return InferenceResult(
-            h_text=h_text,
-            h_aligned=h_aligned,
-            f0_pred=f0_pred,
-            a_pred=a_pred,
-            n_pred=n_pred,
-            style_vector_prosodic=style_prosodic
-        )
-
+        return h_text_gt, h_bert_raw_gt, h_bert_gt, h_text_target, h_bert_raw_target, h_bert_target, input_lengths, text_mask, style_vector_acoustic, style_vector_prosodic
 
     @torch.no_grad()
     def extract_embeddings(self, tokens: Tensor):
+
         input_lengths = torch.LongTensor([tokens.shape[-1]]).to(tokens.device)
         text_mask = length_to_mask(input_lengths).to(tokens.device)
 
@@ -202,7 +186,7 @@ class StyleTTS2:
         return h_text, h_bert_raw, h_bert, input_lengths, text_mask
 
     @torch.no_grad()
-    def inference_after_interpolation(self, input_lengths: Tensor, text_mask: Tensor, h_bert: Tensor, h_text: Tensor, style_vector_acoustic: Tensor, style_vector_prosodic: Tensor) -> InferenceResult:
+    def inference_after_interpolation(self, input_lengths: Tensor, text_mask: Tensor, h_bert: Tensor, h_text: Tensor, style_vector_acoustic: Tensor, style_vector_prosodic: Tensor) -> Tensor:
 
         # AdaIN, Adding information of style vector to phoneme
         h_bert_with_style = self.model.predictor.text_encoder(h_bert, style_vector_acoustic, input_lengths, text_mask)
@@ -218,68 +202,22 @@ class StyleTTS2:
 
         f0_pred, n_pred = self.model.predictor.F0Ntrain(h_bert_with_style_per_frame, style_vector_acoustic)
 
-        inferenceResult = InferenceResult(
-            h_text=h_text,
-            h_aligned=h_aligned,
-            f0_pred=f0_pred,
-            a_pred=a_pred,
-            n_pred=n_pred,
-            style_vector_prosodic=style_vector_prosodic,
-        )
-
-        return inferenceResult
-
-    @torch.no_grad()
-    def inference(self, tokens: Tensor, noise, embedding_scale, diffusion_steps) -> InferenceResult:
-        # Number of phoneme / Length of tokens, shape[-1] = last element in list/array
-        input_lengths = torch.LongTensor([tokens.shape[-1]]).to(tokens.device)
-
-        # Creates a bitmask based on number of phonemes
-        text_mask = length_to_mask(input_lengths).to(tokens.device)
-
-        # Creates acoustic text encoder (phoneme -> feature vectors)
-        h_text = self.model.text_encoder(tokens, input_lengths, text_mask)
-
-        # Creates prosodic text encoder (phoneme -> feature vectors)
-        h_bert_original = self.model.bert(tokens, attention_mask=(~text_mask).int())
-        h_bert = self.model.bert_encoder(h_bert_original).transpose(-1, -2)
-
-        # Function Call
-        style_vector_acoustic, style_vector_prosodic = self.computeStyleVector(noise, h_bert_original, embedding_scale, diffusion_steps)
-
-        # AdaIN, Adding information of style vector to phoneme
-        h_bert_with_style = self.model.predictor.text_encoder(h_bert, style_vector_acoustic, input_lengths, text_mask)
-
-        ## Function Call
-        a_pred = self.predictDuration(h_bert_with_style, input_lengths)
-
-        # Multiply alignment matrix with h_text
-        h_aligned = h_text @ a_pred.unsqueeze(0).to(self.device)  # (B, D_text, T_frames)
-
-        # Multiply per-phoneme embedding (bert_encoder_with_style) with frame-per-phoneme matrix -> per-frame text embedding
-        h_bert_with_style_per_frame = (h_bert_with_style.transpose(-1, -2) @ a_pred.unsqueeze(0).to(self.device))
-
-        f0_pred, n_pred = self.model.predictor.F0Ntrain(h_bert_with_style_per_frame, style_vector_acoustic)
-
-        inferenceResult = InferenceResult(
-            h_text=h_text,
-            h_aligned=h_aligned,
-            f0_pred=f0_pred,
-            a_pred=a_pred,
-            n_pred=n_pred,
-            style_vector_prosodic=style_vector_prosodic,
-        )
-
-        return inferenceResult
-
-    @torch.no_grad()
-    def synthesizeSpeech(self, inferenceResult: InferenceResult):
-
         out = self.model.decoder(
-            inferenceResult.h_aligned,
-            inferenceResult.f0_pred,
-            inferenceResult.n_pred,
-            inferenceResult.style_vector_prosodic.squeeze().unsqueeze(0)
+            h_aligned,
+            f0_pred,
+            n_pred,
+            style_vector_prosodic.squeeze().unsqueeze(0)
         )
 
-        return out.squeeze().cpu().numpy()
+        return out
+
+    @torch.no_grad()
+    def inference(self, text: str, noise: Tensor, embedding_scale, diffusion_steps) -> Tensor:
+
+        tokens = self.preprocessText(text)
+
+        h_text, h_bert_raw, h_bert, input_lengths, text_mask = self.extract_embeddings(tokens)
+
+        style_vector_acoustic, style_vector_prosodic = self.computeStyleVector(noise, h_bert_raw, embedding_scale, diffusion_steps)
+
+        return self.inference_after_interpolation(input_lengths, text_mask, h_bert, h_text, style_vector_acoustic, style_vector_prosodic)
