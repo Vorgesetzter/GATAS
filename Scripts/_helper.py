@@ -30,32 +30,16 @@ def addNumbersPattern(to_change: Tensor, reference: Tensor, pattern: list[int]) 
 
     return to_change
 
-def interpolateWithVector(ground_truth: Tensor, target: Tensor, alpha: Tensor) -> Tensor:
-    """
-    Phoneme-level interpolation between ground_truth and target embeddings.
+def adjustInterpolationVector(IV: Tensor, matrix: Tensor, size_per_phoneme: int) -> Tensor:
 
-    ground_truth: (B, D, T)
-    target:       (B, D, T)
-    alpha:        (T,) torch.Tensor
-                  alpha[t] = 0 → choose ground truth
-                  alpha[t] = 1 → choose target
-    """
+    # Matrix Multiplication, since IV not Scalar Value
+    if size_per_phoneme != 1:
+        IV = IV @ matrix
 
-    assert ground_truth.shape == target.shape, "ground_truth and target must have same shape"
-    B, D, T = ground_truth.shape
+    IV = IV.unsqueeze(0)
+    IV = IV.permute(0, 2, 1)
 
-    # Ensure alpha has correct length
-    assert alpha.shape[-1] == T, f"alpha length {alpha.shape[-1]} != T={T}"
-
-    # Move alpha to correct device + dtype
-    alpha = alpha.to(ground_truth.device, ground_truth.dtype)
-
-    # Reshape for broadcasting: (1, 1, T)
-    alpha = alpha.view(1, 1, T)
-
-    # Interpolate
-    mixed = (1.0 - alpha) * ground_truth + alpha * target
-    return mixed
+    return interpolation_vector
 
 def interpolateWithScalar(a: Tensor, b: Tensor, alpha: float) -> Tensor:
     return (1 - alpha) * a + alpha * b
