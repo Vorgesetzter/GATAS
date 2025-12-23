@@ -8,16 +8,17 @@ import soundfile as sf
 import requests
 from dotenv import load_dotenv
 
-# Import your local helper for the vector adjustment
+# Local imports
 from _helper import adjustInterpolationVector, AttackMode
 
-
-def finalize_run(optimizer, tts_model, asr_model, args, run_context, embedding_data, device):
+def finalize_run(optimizer, models, args, run_context, data, device):
     """
     Main entry point to finalize the optimization run.
+    Unpacks dictionaries to ensure compatibility with main.py.
     """
     # 1. Setup Directory
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+    # Use objective_order and active_objectives from run_context
     objective_tags = [obj.name for obj in run_context['objective_order'] if obj in run_context['active_objectives']]
     objectives_str = "_".join(objective_tags) if objective_tags else "NONE"
 
@@ -31,12 +32,16 @@ def finalize_run(optimizer, tts_model, asr_model, args, run_context, embedding_d
     # 3. Get Best Candidate & Run Inference
     best_candidate = optimizer.best_candidates[0]
 
+    # Extract specific models from the dictionary for inference
+    tts_model = models['tts_model']
+    asr_model = models['asr_model']
+
     results = _run_final_inference(
-        best_candidate, tts_model, asr_model, args, embedding_data, device
+        best_candidate, tts_model, asr_model, args, data, device
     )
 
     # 4. Save Audio & Torch State
-    _save_artifacts(folder_path, results, best_candidate, embedding_data, args, run_context)
+    _save_artifacts(folder_path, results, best_candidate, data, args, run_context)
 
     # 5. Write Text Summary
     _write_run_summary(folder_path, args, run_context, results, best_candidate)
