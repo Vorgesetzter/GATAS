@@ -14,11 +14,10 @@ from _helper import adjustInterpolationVector, AttackMode
 def finalize_run(optimizer, models, args, run_context, data, device):
     """
     Main entry point to finalize the optimization run.
-    Unpacks dictionaries to ensure compatibility with main.py.
+    Fixed: Uses 'data' instead of 'embedding_data' and 'models' dictionary.
     """
     # 1. Setup Directory
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-    # Use objective_order and active_objectives from run_context
     objective_tags = [obj.name for obj in run_context['objective_order'] if obj in run_context['active_objectives']]
     objectives_str = "_".join(objective_tags) if objective_tags else "NONE"
 
@@ -32,7 +31,7 @@ def finalize_run(optimizer, models, args, run_context, data, device):
     # 3. Get Best Candidate & Run Inference
     best_candidate = optimizer.best_candidates[0]
 
-    # Extract specific models from the dictionary for inference
+    # Extract specific models from the dictionary
     tts_model = models['tts_model']
     asr_model = models['asr_model']
 
@@ -56,7 +55,6 @@ def finalize_run(optimizer, models, args, run_context, data, device):
 # ================= INTERNAL HELPERS =================
 
 def _plot_fitness_history(fitness_history, mean_model, folder_path):
-    df_all_fitness = pd.DataFrame(fitness_history)
     df_means = pd.DataFrame(mean_model)
     fitness_cols = [col for col in df_means.columns if col.endswith("_Mean") and col != "Generation"]
 
@@ -83,44 +81,48 @@ def _plot_fitness_history(fitness_history, mean_model, folder_path):
     plt.close()
 
 
-def _run_final_inference(best, tts_model, asr_model, args, emb, device):
-    """Reconstructs the best audio and runs ASR."""
+def _run_final_inference(best, tts_model, asr_model, args, data, device):
+    """
+    Reconstructs the best audio and runs ASR.
+    Fixed: Uses 'data' instead of 'emb' and 'input_lengths' instead of 'phoneme_count'.
+    """
+    # Extract phoneme count from input_lengths tensor
+    phoneme_count = int(data['input_lengths'].item())
 
     # Extract & Adjust Vector
     best_vector = torch.from_numpy(best.solution).to(device).float()
-    best_vector = best_vector.view(emb['phoneme_count'], args.size_per_phoneme)
-    best_vector = adjustInterpolationVector(best_vector, emb['random_matrix'], args.size_per_phoneme)
+    best_vector = best_vector.view(phoneme_count, args.size_per_phoneme)
+    best_vector = adjustInterpolationVector(best_vector, data['random_matrix'], args.size_per_phoneme)
 
     # Mix Embeddings
-    # Note: Accessing AttackMode enum from args or importing it globally is required
-    try:
-        mode_enum = AttackMode[args.mode]
-    except:
-        mode_enum = args.mode  # Fallback if passed as Enum directly
+    mode = data['mode']
 
-    if mode_enum is AttackMode.NOISE_UNTARGETED or mode_enum is AttackMode.TARGETED:
-        h_text_mixed_best = (1.0 - best_vector) * emb['h_text_gt'] + best_vector * emb['h_text_target']
+    if mode is AttackMode.NOISE_UNTARGETED or mode is AttackMode.TARGETED:
+        h_text_mixed_best = (1.0 - best_vector) * data['h_text_gt'] + best_vector * data['h_text_target']
     else:
-        h_text_mixed_best = best_vector + args.iv_scalar * best_vector
+        # Fixed: Mode-dependent logic for UNTARGETED
+        h_text_mixed_best = data['h_text_gt'] + args.iv_scalar * best_vector
 
-    h_bert_mixed_best = emb['h_bert_gt']
+    # h_bert logic: StyleTTS2 often uses GT BERT even for mixed text
+    h_bert_mixed_best = data['h_bert_gt']
 
     # Inference
     with torch.no_grad():
         audio_gt = tts_model.inference_after_interpolation(
-            emb['input_lengths'], emb['text_mask'], emb['h_bert_gt'], emb['h_text_gt'],
-            emb['style_vector_acoustic'], emb['style_vector_prosodic']
+            data['input_lengths'], data['text_mask'], data['h_bert_gt'], data['h_text_gt'],
+            data['style_vector_acoustic'], data['style_vector_prosodic']
         )
         audio_target = tts_model.inference_after_interpolation(
-            emb['input_lengths'], emb['text_mask'], emb['h_bert_target'], emb['h_text_target'],
-            emb['style_vector_acoustic'], emb['style_vector_prosodic']
+            data['input_lengths'], data['text_mask'],
+            data.get('h_bert_target', data['h_bert_gt']), data['h_text_target'],
+            data['style_vector_acoustic'], data['style_vector_prosodic']
         )
         audio_best = tts_model.inference_after_interpolation(
-            emb['input_lengths'], emb['text_mask'], h_bert_mixed_best, h_text_mixed_best,
-            emb['style_vector_acoustic'], emb['style_vector_prosodic']
+            data['input_lengths'], data['text_mask'], h_bert_mixed_best, h_text_mixed_best,
+            data['style_vector_acoustic'], data['style_vector_prosodic']
         )
 
-    # ASR
+    # ASR Analysis
     asr_final, conf_final = asr_model.analyzeAudio(audio_best)
 
     return {
@@ -128,12 +130,12 @@ def _run_final_inference(best, tts_model, asr_model, args, emb, device):
         "audio_target": audio_target,
         "audio_best": audio_best,
         "asr_text": asr_final["text"].strip(),
-        "asr_conf": conf_final,
-        "best_vector_tensor": best_vector  # Return for saving if needed
+        "asr_conf": conf_final
     }
 
 
-def _save_artifacts(folder_path, results, best, emb, args, run_context):
+def _save_artifacts(folder_path, results, best, data, args, run_context):
+    """Fixed: Uses 'data' dictionary keys."""
     # Save Audio
     sf.write(os.path.join(folder_path, "ground_truth.wav"), results['audio_gt'], samplerate=24000)
     sf.write(os.path.join(folder_path, "target.wav"), results['audio_target'], samplerate=24000)
@@ -142,9 +144,9 @@ def _save_artifacts(folder_path, results, best, emb, args, run_context):
     # Save Torch State
     state_dict = {
         "interpolation_vector": torch.tensor(best.solution).float().cpu(),
-        "random_matrix": emb['random_matrix'],
-        "AttackMode": args.mode,
-        "Active Objectives": run_context['active_objectives'],
+        "random_matrix": data['random_matrix'],
+        "AttackMode": data['mode'].name,
+        "Active Objectives": [obj.name for obj in run_context['active_objectives']],
         "size_per_phoneme": args.size_per_phoneme,
         "IV_scalar": args.iv_scalar,
         "fitness_values": best.fitness,
@@ -159,7 +161,7 @@ def _save_artifacts(folder_path, results, best, emb, args, run_context):
 
 
 def _write_run_summary(folder_path, args, run_context, results, best):
-    # Gather Hardware
+    # Hardware & Timing Logic
     os_info = f"{platform.system()} {platform.release()}"
     cpu_info = platform.processor()
     if torch.cuda.is_available():
@@ -169,23 +171,21 @@ def _write_run_summary(folder_path, args, run_context, results, best):
     else:
         hardware_str = f"GPU: None (CPU Only)\n  CPU: {cpu_info}\n  OS:  {os_info}"
 
-    # Calculate Timing
     pbar = run_context['progress_bar']
     rate = pbar.format_dict['rate']
     elapsed = pbar.format_dict['elapsed']
     time_per_gen = (1.0 / rate) if rate and rate > 0 else 0.0
 
-    # Active Objectives list
     active_in_order = [obj for obj in run_context['objective_order'] if obj in run_context['active_objectives']]
 
     summary_path = os.path.join(folder_path, "run_summary.txt")
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("=== Adversarial TTS Optimization Summary ===\n")
-        f.write("\n--- Texts ---\n")
+        f.write(f"\n--- Texts ---\n")
         f.write(f"Ground Truth Text: {args.ground_truth_text}\n")
         f.write(f"Target Text: {args.target_text}\n")
 
-        f.write("\n--- Variable Values ---\n")
+        f.write(f"\n--- Variable Values ---\n")
         f.write(f"AttackMode: {args.mode}\n")
         f.write(f"Active Objectives: {', '.join([obj.name for obj in active_in_order])}\n")
         f.write(f"Population size: {args.pop_size}\n")
@@ -201,20 +201,17 @@ def _write_run_summary(folder_path, args, run_context, results, best):
 
         f.write(f"Generations Run:   {run_context['current_gen'] + 1}/{args.num_generations}\n")
 
-        f.write("\n--- Performance ---\n")
+        f.write(f"\n--- Performance ---\n")
         f.write(f"{hardware_str}\n")
         f.write(f"Total Time Duration: {elapsed:.2f}s\n")
         f.write(f"Time per Generation: {time_per_gen:.2f}s\n")
 
-        f.write("\n--- Fitness Values ---\n")
-        f.write(f"Generation best candidate found: {getattr(best, 'generation', 'Unknown')}\n")
+        f.write(f"\n--- Fitness Values ---\n")
+        f.write(f"Generation best candidate found: {getattr(best, 'generation', 'Unknown')}\n\n")
         f.write("Final fitness values (best candidate):\n")
 
-        if len(best.fitness) != len(active_in_order):
-            f.write(f"  Warning: length mismatch. Raw fitness values: {best.fitness}\n")
-        else:
-            for obj, score in zip(active_in_order, best.fitness):
-                f.write(f"  {obj.name}: {float(score):.6f}\n")
+        for obj, score in zip(active_in_order, best.fitness):
+            f.write(f"  {obj.name}: {float(score):.6f}\n")
 
         f.write(f"\nASR transcription: \"{results['asr_text']}\"\n")
         f.write(f"ASR confidence: {float(results['asr_conf']):.6f}\n")
