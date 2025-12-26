@@ -5,9 +5,6 @@ import os
 from tqdm import tqdm
 from dotenv import load_dotenv
 
-# Import Pymoo components
-from _pymoo_optimizer import PymooOptimizer
-from pymoo.algorithms.moo.nsga2 import NSGA2
 
 # Import your new specialized modules
 from model_loader import initialize_environment
@@ -27,7 +24,7 @@ def parse_arguments():
 
     # Numeric parameters
     parser.add_argument("--loop_count", type=int, default=1, help="The loop count to use.")
-    parser.add_argument("--num_generations", type=int, default=150,
+    parser.add_argument("--num_generations", type=int, default=100,
                         help="Number of generations for the optimizer.")
     parser.add_argument("--pop_size", type=int, default=100,
                         help="Population size.")
@@ -39,6 +36,8 @@ def parse_arguments():
     # Boolean parameters
     parser.add_argument("--notify", action="store_true",
                         help="If set, sends a WhatsApp notification upon completion.")
+    parser.add_argument("--subspace_optimization", action="store_true",
+                        help="If set, does subspace optimization for the embedding vector.")
 
     # Enum/Selection parameters
     parser.add_argument("--mode", type=str, default="TARGETED",
@@ -54,51 +53,35 @@ def parse_arguments():
 
     return parser.parse_args()
 
-
 def main():
     # 1. Parse Arguments and set Device
-    args = parse_arguments()
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    args = parse_arguments()
 
     # 2. Initialize Environment
     # This handles Enums, Thresholds, Model Loading, and Reference Data generation
-    models, data = initialize_environment(args, device)
+    config_data, model_data, audio_data, embedding_data = initialize_environment(args, device)
 
     # Safety check if initialization failed (e.g., invalid Enum name)
-    if models is None or data is None:
+    if config_data is None:
         return
-
-    # 3. Setup Optimizer
-    # Extract phoneme count from the StyleTTS2 processing done in the loader
-    phoneme_count = data['input_lengths'].detach().cpu().item()
-
-    optimizer = PymooOptimizer(
-        bounds=(0, 1),
-        algorithm=NSGA2,
-        algo_params={"pop_size": args.pop_size},
-        num_objectives=len(data['ACTIVE_OBJECTIVES']),
-        solution_shape=(phoneme_count, args.size_per_phoneme),
-    )
 
     print(f"Starting Optimization Loop...")
 
     # 4. Main Loop
-    for iteration in tqdm(range(args.loop_count), desc="Total Progress"):
+    for iteration in tqdm(range(config_data.loop_count), desc="Total Progress"):
 
         # Run the generation loop (Core Logic)
-        fitness_history, mean_model, progress_bar, stop_optimization, gen = run_optimization_generation(
-            optimizer,
-            iteration,
-            models,
-            data,
-            args,
-            device
+        fitness_data, progress_bar, gen = run_optimization_generation(
+            config_data, model_data, audio_data, embedding_data, iteration, device
         )
 
         # Prepare runtime context for the reporting module
         run_context = {
-            "fitness_history": fitness_history,
-            "mean_model": mean_model,
+            "mean_fitness_history": mean_fitness_history,
+            "pareto_fitness_history": pareto_fitness_history,
+            "total_fitness_history": total_fitness_history,
             "progress_bar": progress_bar,
             "current_gen": gen,
             "stop_optimization": stop_optimization,
@@ -109,14 +92,7 @@ def main():
 
         # 5. Finalize and Save Results
         # This creates folders, saves audio, generates graphs, and sends notifications
-        finalize_run(
-            optimizer,
-            models,
-            args,
-            run_context,
-            data,
-            device
-        )
+        finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar, gen, device)
 
         # Break outer loop if early stopping was triggered in the inner loop
         if stop_optimization:

@@ -1,52 +1,55 @@
-import os
 import datetime
 import platform
 import torch
 import pandas as pd
-import matplotlib.pyplot as plt
 import soundfile as sf
 import requests
 from dotenv import load_dotenv
 
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import numpy as np
+import os
+
+from _entities import *
 # Local imports
 from _helper import adjustInterpolationVector, AttackMode
 
-def finalize_run(optimizer, models, args, run_context, data, device):
-    """
-    Main entry point to finalize the optimization run.
-    Fixed: Uses 'data' instead of 'embedding_data' and 'models' dictionary.
-    """
+from Scripts._optimizer_candidate import OptimizerCandidate
+
+def finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar, gen, device):
+
     # 1. Setup Directory
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-    objective_tags = [obj.name for obj in run_context['objective_order'] if obj in run_context['active_objectives']]
-    objectives_str = "_".join(objective_tags) if objective_tags else "NONE"
+    objectives_str = "_".join(config_data.active_objectives) if config_data.active_objectives else "NONE"
 
     folder_path = os.path.join("outputs", "h_text", objectives_str, timestamp)
     os.makedirs(folder_path, exist_ok=True)
     print(f"Results saved to: {folder_path}")
 
     # 2. Plot Graphs
-    _plot_fitness_history(run_context['fitness_history'], run_context['mean_model'], folder_path)
+    _generate_all_visualizations(config_data, fitness_data, folder_path)
 
     # 3. Get Best Candidate & Run Inference
-    best_candidate = optimizer.best_candidates[0]
+    best_candidate = _select_best_candidate(model_data.optimizer.best_candidates)
 
-    # Extract specific models from the dictionary
-    tts_model = models['tts_model']
-    asr_model = models['asr_model']
+    print("Best candidate fitness values:")
+    for obj, score in zip(config_data.active_objectives, best_candidate.fitness):
+        print(f"  {obj.name}: {score:.6f}")
+    print()
 
-    results = _run_final_inference(
-        best_candidate, tts_model, asr_model, args, data, device
+    best_mixed_audio = _run_final_inference(
+        best_candidate, model_data.tts_model, model_data.asr_model, audio_data, config_data, device
     )
 
     # 4. Save Audio & Torch State
-    _save_artifacts(folder_path, results, best_candidate, data, args, run_context)
+    _save_artifacts(folder_path, best_mixed_audio, audio_data, config_data, best_candidate)
 
     # 5. Write Text Summary
-    _write_run_summary(folder_path, args, run_context, results, best_candidate)
+    _write_run_summary(folder_path, config_data, best_mixed_audio, best_candidate, progress_bar, gen)
 
     # 6. Notify (WhatsApp)
-    if args.notify:
+    if config_data.notify:
         _send_whatsapp_notification()
 
     print("Done.")
@@ -54,114 +57,298 @@ def finalize_run(optimizer, models, args, run_context, data, device):
 
 # ================= INTERNAL HELPERS =================
 
-def _plot_fitness_history(fitness_history, mean_model, folder_path):
-    df_means = pd.DataFrame(mean_model)
-    fitness_cols = [col for col in df_means.columns if col.endswith("_Mean") and col != "Generation"]
+def _generate_all_visualizations(config_data, fitness_data, folder_path):
 
-    fig, axs = plt.subplots(len(fitness_cols), 1, figsize=(14, 5 * len(fitness_cols)))
-    if len(fitness_cols) == 1:
-        axs = [axs]
+    active_objectives = config_data.active_objectives
+    # Image 1: Pareto Evolution (If 2 objectives)
+    if len(fitness_data.pareto_fitness) >= 4 and len(active_objectives) == 2:
+        _generate_pareto_population_graph(
+            fitness_data.pareto_fitness,
+            active_objectives,
+            folder_path
+        )
 
-    fig.suptitle("Evolution of Fitness Objectives (Mean)", fontsize=16)
+    # Image 2: Mean Progress
+    _generate_mean_population_graph(
+        fitness_data.mean_fitness,
+        active_objectives,
+        folder_path,
+    )
 
-    for j, col_name in enumerate(sorted(fitness_cols)):
-        x_data = df_means["Generation"]
-        y_data = df_means[col_name]
-        color = "blue" if j % 2 == 0 else "green"
-        axs[j].plot(x_data, y_data, color=color, linestyle="--", alpha=0.6, label="Population Mean")
-        axs[j].set_title(col_name)
-        axs[j].set_xlabel("Generation")
-        axs[j].set_ylabel("Fitness")
-        axs[j].grid(True, alpha=0.3)
-        axs[j].legend()
+    # Image 3: Population Evolution
+    _generate_total_population_graph(
+        fitness_data.total_fitness_history,
+        active_objectives,
+        folder_path
+    )
 
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.92)
-    plt.savefig(os.path.join(folder_path, "graph.png"), dpi=300, bbox_inches="tight")
+def _generate_pareto_population_graph(pareto_fitness_history, active_objectives, folder_path):
+
+    total_gens = len(pareto_fitness_history)
+
+    # 1. Determine which 4 generations to plot
+    # We use linspace to find 4 equidistant indices
+    indices = np.linspace(0, total_gens - 1, 4, dtype=int)
+
+    # 2. Setup Single Plot
+    obj_names = [obj.name for obj in active_objectives]
+    fig, ax = plt.subplots(figsize=(12, 10))
+
+    # Generate 4 distinct colors using a colormap (e.g., 'viridis', 'plasma', 'coolwarm')
+    # 0.0 = Start (Purple/Blue), 1.0 = End (Yellow/Red) depending on map
+    colors = cm.viridis(np.linspace(0, 1, len(indices)))
+
+    fig.suptitle(f"Pareto Front Evolution: {obj_names[0]} vs {obj_names[1]}", fontsize=18)
+
+    # 3. Plot the 4 snapshots on the SAME axis
+    for i, (idx, color) in enumerate(zip(indices, colors)):
+
+        # Extract data
+        F = pareto_fitness_history[idx]
+
+        # Safety check
+        if F.size == 0 or F.shape[1] < 2:
+            continue
+
+        # Sort by first objective so the connecting line is clean, not a web
+        F = F[F[:, 0].argsort()]
+
+        # Create Label (e.g., "Gen 1 (0%)" or "Gen 50 (33%)")
+        label_text = f"Gen {idx + 1} ({(idx + 1) / total_gens:.0%})"
+
+        # Plot Scatter (Dots)
+        ax.scatter(F[:, 0], F[:, 1], color=color, s=60, alpha=0.8, edgecolors='k', label=label_text, zorder=i + 2)
+
+        # Plot Line (Connection)
+        # alpha=0.4 ensures lines don't distract too much from the points
+        ax.plot(F[:, 0], F[:, 1], color=color, linestyle='--', alpha=0.5, linewidth=1.5, zorder=i + 1)
+
+    # 4. Final Styling
+    ax.set_xlabel(obj_names[0], fontsize=12)
+    ax.set_ylabel(obj_names[1], fontsize=12)
+    ax.grid(True, linestyle=':', alpha=0.6)
+
+    # Add a legend to explain the colors
+    ax.legend(title="Evolution Progress", fontsize=10, title_fontsize=12, loc='best')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # Save
+    save_path = os.path.join(folder_path, "pareto_evolution_single.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+    print(f"Pareto graph saved to: {save_path}")
+
+def _generate_mean_population_graph(mean_history, active_objectives, folder_path):
+    """
+    Generates a vertical stack of graphs showing the Mean fitness for each active objective.
+    """
+    df = pd.DataFrame(mean_history)
+
+    fig, axs = plt.subplots(len(active_objectives), 1, figsize=(12, 5 * len(active_objectives)), squeeze=False)
+    fig.suptitle("Mean Fitness Evolution per Objective", fontsize=18)
+
+    for i, obj in enumerate(active_objectives):
+        ax = axs[i, 0]
+        col_name = f"{obj.name}_Mean"
+
+        if col_name in df.columns:
+            ax.plot(df["Generation"], df[col_name], color='blue', linewidth=2, label="Population Mean")
+            ax.set_title(f"Objective: {obj.name}", fontsize=14)
+            ax.set_ylabel("Fitness Score")
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+        else:
+            ax.text(0.5, 0.5, f"Data for {obj.name} not found", ha='center')
+
+    plt.xlabel("Generation")
+    plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+    plt.savefig(os.path.join(folder_path, "mean_fitness_stack.png"), dpi=300)
     plt.close()
 
+def _generate_total_population_graph(history_pop_fitness, active_objectives, folder_path):
+    """
+    Creates a SINGLE graph overlaying the Full Population Cloud at Start, 33%, 66%, and End.
+    Uses Jitter to reveal stacked/duplicate individuals.
+    """
+    if len(active_objectives) < 2:
+        print("Skipping Population Cloud Graph: Requires at least 2 active objectives.")
+        return
 
-def _run_final_inference(best, tts_model, asr_model, args, data, device):
+    total_gens = len(history_pop_fitness)
+    if total_gens == 0:
+        print("Skipping Population Cloud Graph: History is empty.")
+        return
+
+    # 1. Determine which 4 generations to plot (Start -> End)
+    indices = np.linspace(0, total_gens - 1, 4, dtype=int)
+
+    # 2. Setup Plot
+    obj_names = [obj.name for obj in active_objectives]
+    fig, ax = plt.subplots(figsize=(12, 10))
+
+    # Generate colors (Purple=Early -> Yellow=Late)
+    colors = cm.viridis(np.linspace(0, 1, len(indices)))
+
+    fig.suptitle(f"Population Cloud Evolution: {obj_names[0]} vs {obj_names[1]}", fontsize=18)
+
+    # 3. Plot the 4 snapshots
+    for i, (idx, color) in enumerate(zip(indices, colors)):
+
+        # Extract the Raw Matrix (Shape: [Pop_Size, 2])
+        # This contains ALL individuals, including identical clones.
+        F = history_pop_fitness[idx]
+
+        if F.size == 0 or F.shape[1] < 2:
+            continue
+
+        # --- JITTER LOGIC ---
+        # Add small random noise to separate stacked dots
+        # Scale: 0.002 is usually good for metrics like WER/PESQ (range 0-1)
+        # If your dots are still stacked, increase this to 0.005
+        jitter_x = np.random.normal(0, 0.002, size=F.shape[0])
+        jitter_y = np.random.normal(0, 0.002, size=F.shape[0])
+
+        x_coords = F[:, 0] + jitter_x
+        y_coords = F[:, 1] + jitter_y
+        # --------------------
+
+        label_text = f"Gen {idx + 1} ({(idx + 1) / total_gens:.0%})"
+
+        # Plot Scatter
+        # alpha=0.5 helps show density (darker areas = more individuals piled up)
+        ax.scatter(x_coords, y_coords, color=color, s=40, alpha=0.5, label=label_text, zorder=i + 2)
+
+    # 4. Final Styling
+    ax.set_xlabel(obj_names[0], fontsize=12)
+    ax.set_ylabel(obj_names[1], fontsize=12)
+    ax.grid(True, linestyle=':', alpha=0.6)
+
+    # Add legend
+    ax.legend(title="Evolution Progress", fontsize=10, title_fontsize=12, loc='best')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+
+    # Save
+    save_path = os.path.join(folder_path, "population_cloud_evolution.png")
+    plt.savefig(save_path, dpi=300)
+    plt.close()
+    print(f"Population cloud graph saved to: {save_path}")
+
+def _select_best_candidate(candidates):
+    """
+    Identifies the 'Knee Point' (best trade-off) from a list of OptimizerCandidates.
+    Returns a single OptimizerCandidate object.
+    """
+
+    if not candidates:
+        raise ValueError("Candidate list is empty.")
+
+    # 1. Extract fitness tuples into a NumPy array for math operations
+    # Shape will be (num_candidates, num_objectives)
+    f = np.array([c.fitness for c in candidates])
+
+    # 3. Calculate Euclidean distance to the 'Ideal Point' (0, 0, ...)
+    # Since we minimize, the origin is the theoretical perfect score.
+    distances = np.linalg.norm(f, axis=1)
+
+    # 4. Find the index of the candidate with the minimum distance
+    knee_idx = np.argmin(distances)
+
+    # Return the actual dataclass object at that index
+    return candidates[knee_idx]
+
+def _run_final_inference(best_candidate, tts_model, asr_model, audio_data, config_data, device):
     """
     Reconstructs the best audio and runs ASR.
     Fixed: Uses 'data' instead of 'emb' and 'input_lengths' instead of 'phoneme_count'.
     """
     # Extract phoneme count from input_lengths tensor
-    phoneme_count = int(data['input_lengths'].item())
+    phoneme_count = int(audio_data.input_lengths.item())
 
     # Extract & Adjust Vector
-    best_vector = torch.from_numpy(best.solution).to(device).float()
-    best_vector = best_vector.view(phoneme_count, args.size_per_phoneme)
-    best_vector = adjustInterpolationVector(best_vector, data['random_matrix'], args.size_per_phoneme)
+    best_vector = torch.from_numpy(best_candidate.solution).to(device).float()
+    best_vector = best_vector.view(phoneme_count, config_data.size_per_phoneme)
+    best_vector = adjustInterpolationVector(best_vector, config_data.random_matrix, config_data.size_per_phoneme)
 
     # Mix Embeddings
-    mode = data['mode']
-
-    if mode is AttackMode.NOISE_UNTARGETED or mode is AttackMode.TARGETED:
-        h_text_mixed_best = (1.0 - best_vector) * data['h_text_gt'] + best_vector * data['h_text_target']
+    if config_data.mode is AttackMode.NOISE_UNTARGETED or config_data.mode is AttackMode.TARGETED:
+        h_text_mixed_best = (1.0 - best_vector) * audio_data.h_text_gt + best_vector * audio_data.h_text_target
     else:
         # Fixed: Mode-dependent logic for UNTARGETED
-        h_text_mixed_best = data['h_text_gt'] + args.iv_scalar * best_vector
+        h_text_mixed_best = audio_data.h_text_gt + config_data.iv_scalar * best_vector
 
     # h_bert logic: StyleTTS2 often uses GT BERT even for mixed text
-    h_bert_mixed_best = data['h_bert_gt']
+    h_bert_mixed_best = audio_data.h_bert_gt
 
     # Inference
     with torch.no_grad():
-        audio_gt = tts_model.inference_after_interpolation(
-            data['input_lengths'], data['text_mask'], data['h_bert_gt'], data['h_text_gt'],
-            data['style_vector_acoustic'], data['style_vector_prosodic']
-        )
-        audio_target = tts_model.inference_after_interpolation(
-            data['input_lengths'], data['text_mask'],
-            data.get('h_bert_target', data['h_bert_gt']), data['h_text_target'],
-            data['style_vector_acoustic'], data['style_vector_prosodic']
-        )
         audio_best = tts_model.inference_after_interpolation(
-            data['input_lengths'], data['text_mask'], h_bert_mixed_best, h_text_mixed_best,
-            data['style_vector_acoustic'], data['style_vector_prosodic']
+            audio_data.input_lengths,
+            audio_data.text_mask,
+            h_bert_mixed_best,
+            h_text_mixed_best,
+            audio_data.style_vector_acoustic,
+            audio_data.style_vector_prosodic
         )
 
     # ASR Analysis
-    asr_final, conf_final = asr_model.analyzeAudio(audio_best)
+    asr_result, asr_logprob = asr_model.analyzeAudio(audio_best)
 
-    return {
-        "audio_gt": audio_gt,
-        "audio_target": audio_target,
-        "audio_best": audio_best,
-        "asr_text": asr_final["text"].strip(),
-        "asr_conf": conf_final
-    }
+    return BestMixedAudio(
+        audio=audio_best,
+        text=asr_result["text"].strip(),
+        logprob=float(asr_logprob),
+        h_text=h_text_mixed_best,
+        h_bert=h_bert_mixed_best
+    )
 
+def _save_artifacts(folder_path, best_mixed_audio, audio_data, config_data, best_candidate):
 
-def _save_artifacts(folder_path, results, best, data, args, run_context):
     """Fixed: Uses 'data' dictionary keys."""
     # Save Audio
-    sf.write(os.path.join(folder_path, "ground_truth.wav"), results['audio_gt'], samplerate=24000)
-    sf.write(os.path.join(folder_path, "target.wav"), results['audio_target'], samplerate=24000)
-    sf.write(os.path.join(folder_path, "interpolated.wav"), results['audio_best'], samplerate=24000)
+    sf.write(os.path.join(folder_path, "ground_truth.wav"), audio_data.audio_gt, samplerate=24000)
+    sf.write(os.path.join(folder_path, "target.wav"), audio_data.audio_target, samplerate=24000)
+    sf.write(os.path.join(folder_path, "interpolated.wav"), best_mixed_audio.audio, samplerate=24000)
 
     # Save Torch State
     state_dict = {
-        "interpolation_vector": torch.tensor(best.solution).float().cpu(),
-        "random_matrix": data['random_matrix'],
-        "AttackMode": data['mode'].name,
-        "Active Objectives": [obj.name for obj in run_context['active_objectives']],
-        "size_per_phoneme": args.size_per_phoneme,
-        "IV_scalar": args.iv_scalar,
-        "fitness_values": best.fitness,
-        "text_gt": args.ground_truth_text,
-        "text_target": args.target_text,
-        "asr_text": results['asr_text'],
-        "num_generations": args.num_generations,
-        "population_size": args.pop_size,
-        "generation_found": getattr(best, "generation", "Unknown"),
+        # 1. Variables from Configuration (Static)
+        "AttackMode": config_data.mode.name,
+        "Active Objectives": [obj.name for obj in config_data.active_objectives],
+        "size_per_phoneme": config_data.size_per_phoneme,
+        "IV_scalar": config_data.iv_scalar,
+        "num_generations": config_data.num_generations,
+        "population_size": config_data.pop_size,
+        "text_gt": config_data.text_gt,
+        "text_target": config_data.text_target,
+        "random_matrix": config_data.random_matrix,
+
+        # 2. Variables from Optimizer (The "Best" Candidate)
+        "interpolation_vector": torch.from_numpy(best_candidate.solution).float().cpu(),
+        "fitness_values": best_candidate.fitness,
+        "generation_found": getattr(best_candidate, "generation", "Unknown"),
+
+        # 3. Results from Final Inference (BestMixedAudio)
+        "asr_text": best_mixed_audio.text,
+        "asr_logprob": best_mixed_audio.logprob,
+        "h_text_mixed_best": best_mixed_audio.h_text,
+        "h_bert_mixed_best": best_mixed_audio.h_bert,
+
+        # 4. Audio Constants for Reproducibility (AudioData)
+        "input_lengths": audio_data.input_lengths,
+        "text_mask": audio_data.text_mask,
+        "style_vector_acoustic": audio_data.style_vector_acoustic,
+        "style_vector_prosodic": audio_data.style_vector_prosodic,
+        "noise": audio_data.noise
     }
+
     torch.save(state_dict, os.path.join(folder_path, "best_vector.pt"))
 
 
-def _write_run_summary(folder_path, args, run_context, results, best):
-    # Hardware & Timing Logic
+def _write_run_summary(folder_path: str, config_data: ConfigData, best_mixed_audio: BestMixedAudio, best_candidate: OptimizerCandidate, progress_bar, gen):
+
+    # 1. Hardware Detection
     os_info = f"{platform.system()} {platform.release()}"
     cpu_info = platform.processor()
     if torch.cuda.is_available():
@@ -171,51 +358,49 @@ def _write_run_summary(folder_path, args, run_context, results, best):
     else:
         hardware_str = f"GPU: None (CPU Only)\n  CPU: {cpu_info}\n  OS:  {os_info}"
 
-    pbar = run_context['progress_bar']
-    rate = pbar.format_dict['rate']
-    elapsed = pbar.format_dict['elapsed']
+    # 2. Timing Logic (Extracted from the progress_bar dict)
+    rate = progress_bar.format_dict['rate']
+    elapsed = progress_bar.format_dict['elapsed']
     time_per_gen = (1.0 / rate) if rate and rate > 0 else 0.0
-
-    active_in_order = [obj for obj in run_context['objective_order'] if obj in run_context['active_objectives']]
 
     summary_path = os.path.join(folder_path, "run_summary.txt")
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write("=== Adversarial TTS Optimization Summary ===\n")
+
         f.write(f"\n--- Texts ---\n")
-        f.write(f"Ground Truth Text: {args.ground_truth_text}\n")
-        f.write(f"Target Text: {args.target_text}\n")
+        f.write(f"Ground Truth Text: {config_data.text_gt}\n")
+        f.write(f"Target Text:       {config_data.text_target}\n")
 
-        f.write(f"\n--- Variable Values ---\n")
-        f.write(f"AttackMode: {args.mode}\n")
-        f.write(f"Active Objectives: {', '.join([obj.name for obj in active_in_order])}\n")
-        f.write(f"Population size: {args.pop_size}\n")
-        f.write(f"Size per phoneme: {args.size_per_phoneme}\n")
-        f.write(f"IV_scalar: {args.iv_scalar}\n")
+        f.write(f"\n--- Configuration ---\n")
+        f.write(f"AttackMode:        {config_data.mode.name}\n")
+        f.write(f"Active Objectives: {', '.join([obj.name for obj in config_data.active_objectives])}\n")
+        f.write(f"Population Size:   {config_data.pop_size}\n")
+        f.write(f"Size Per Phoneme:  {config_data.size_per_phoneme}\n")
+        f.write(f"IV Scalar:         {config_data.iv_scalar}\n")
+        f.write(f"Subspace Opt:      {config_data.subspace_optimization}\n")
 
-        if run_context.get('thresholds'):
-            t_str = ", ".join([f"{k.name}<={v}" for k, v in run_context['thresholds'].items()])
+        if config_data.thresholds:
+            t_str = ", ".join([f"{k.name}<={v}" for k, v in config_data.thresholds.items()])
             f.write(f"Thresholds Set:    {t_str}\n")
-            f.write(f"Stopped Early:     {'Yes' if run_context['stop_optimization'] else 'No'}\n")
         else:
-            f.write(f"Thresholds Set:    None (Ran full {args.num_generations} gens)\n")
+            f.write(f"Thresholds Set:    None (Ran full {config_data.num_generations} gens)\n")
 
-        f.write(f"Generations Run:   {run_context['current_gen'] + 1}/{args.num_generations}\n")
+        f.write(f"Generations Run:   {gen + 1}/{config_data.num_generations}\n")
 
         f.write(f"\n--- Performance ---\n")
         f.write(f"{hardware_str}\n")
-        f.write(f"Total Time Duration: {elapsed:.2f}s\n")
-        f.write(f"Time per Generation: {time_per_gen:.2f}s\n")
+        f.write(f"Total Duration:    {elapsed:.2f}s\n")
+        f.write(f"Avg per Gen:       {time_per_gen:.2f}s\n")
 
-        f.write(f"\n--- Fitness Values ---\n")
-        f.write(f"Generation best candidate found: {getattr(best, 'generation', 'Unknown')}\n\n")
-        f.write("Final fitness values (best candidate):\n")
+        f.write(f"\n--- Best Candidate Fitness ---\n")
+        f.write(f"Generation Found:  {getattr(best_candidate, 'generation', 'Unknown')}\n\n")
 
-        for obj, score in zip(active_in_order, best.fitness):
+        for obj, score in zip(config_data.active_objectives, best_candidate.fitness):
             f.write(f"  {obj.name}: {float(score):.6f}\n")
 
-        f.write(f"\nASR transcription: \"{results['asr_text']}\"\n")
-        f.write(f"ASR confidence: {float(results['asr_conf']):.6f}\n")
-
+        f.write(f"\n--- ASR Final Result ---\n")
+        f.write(f"Transcription:     \"{best_mixed_audio.text}\"\n")
+        f.write(f"Confidence/Logprob: {best_mixed_audio.logprob:.6f}\n")
 
 def _send_whatsapp_notification():
     load_dotenv()
