@@ -60,10 +60,11 @@ def finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar
 def _generate_all_visualizations(config_data, fitness_data, folder_path):
 
     active_objectives = config_data.active_objectives
+
     # Image 1: Pareto Evolution (If 2 objectives)
-    if len(fitness_data.pareto_fitness) >= 4 and len(active_objectives) == 2:
+    if len(fitness_data.total_fitness) >= 4 and len(active_objectives) == 2:
         _generate_pareto_population_graph(
-            fitness_data.pareto_fitness,
+            fitness_data.total_fitness,
             active_objectives,
             folder_path
         )
@@ -82,9 +83,9 @@ def _generate_all_visualizations(config_data, fitness_data, folder_path):
         folder_path
     )
 
-def _generate_pareto_population_graph(pareto_fitness_history, active_objectives, folder_path):
+def _generate_pareto_population_graph(total_fitness, active_objectives, folder_path):
 
-    total_gens = len(pareto_fitness_history)
+    total_gens = len(total_fitness)
 
     # 1. Determine which 4 generations to plot
     # We use linspace to find 4 equidistant indices
@@ -104,24 +105,24 @@ def _generate_pareto_population_graph(pareto_fitness_history, active_objectives,
     for i, (idx, color) in enumerate(zip(indices, colors)):
 
         # Extract data
-        F = pareto_fitness_history[idx]
+        fitness = _get_local_pareto_front(total_fitness[idx])
 
         # Safety check
-        if F.size == 0 or F.shape[1] < 2:
+        if fitness.size == 0 or fitness.shape[1] < 2:
             continue
 
         # Sort by first objective so the connecting line is clean, not a web
-        F = F[F[:, 0].argsort()]
+        fitness = fitness[fitness[:, 0].argsort()]
 
         # Create Label (e.g., "Gen 1 (0%)" or "Gen 50 (33%)")
         label_text = f"Gen {idx + 1} ({(idx + 1) / total_gens:.0%})"
 
         # Plot Scatter (Dots)
-        ax.scatter(F[:, 0], F[:, 1], color=color, s=60, alpha=0.8, edgecolors='k', label=label_text, zorder=i + 2)
+        ax.scatter(fitness[:, 0], fitness[:, 1], color=color, s=60, alpha=0.8, edgecolors='k', label=label_text, zorder=i + 2)
 
         # Plot Line (Connection)
         # alpha=0.4 ensures lines don't distract too much from the points
-        ax.plot(F[:, 0], F[:, 1], color=color, linestyle='--', alpha=0.5, linewidth=1.5, zorder=i + 1)
+        ax.plot(fitness[:, 0], fitness[:, 1], color=color, linestyle='--', alpha=0.5, linewidth=1.5, zorder=i + 1)
 
     # 4. Final Styling
     ax.set_xlabel(obj_names[0], fontsize=12)
@@ -138,6 +139,17 @@ def _generate_pareto_population_graph(pareto_fitness_history, active_objectives,
     plt.savefig(save_path, dpi=300)
     plt.close()
     print(f"Pareto graph saved to: {save_path}")
+
+def _get_local_pareto_front(fitness_matrix: np.ndarray) -> np.ndarray:
+    """Returns only the non-dominated rows from a fitness matrix."""
+    is_efficient = np.ones(fitness_matrix.shape[0], dtype=bool)
+    for i, c in enumerate(fitness_matrix):
+        if is_efficient[i]:
+            # Keep only individuals not dominated by others
+            # (Assuming minimization; if PESQ is maximized, multiply it by -1 first)
+            is_efficient[is_efficient] = np.any(fitness_matrix[is_efficient] < c, axis=1)
+            is_efficient[i] = True
+    return fitness_matrix[is_efficient]
 
 def _generate_mean_population_graph(mean_history, active_objectives, folder_path):
     """
