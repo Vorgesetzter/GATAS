@@ -206,6 +206,7 @@ def run_optimization_generation(config_data, model_data, audio_data, embedding_d
                 )
 
                 val = float(wer)
+                val = min(val, 1.0) # Clamp to (0, 1)
 
                 gen_scores[FitnessObjective.WER_TARGET].append(val)
                 current_ind_scores[FitnessObjective.WER_TARGET] = val
@@ -259,6 +260,9 @@ def run_optimization_generation(config_data, model_data, audio_data, embedding_d
                 # Values: usually (0, 1), rarely > 1
                 # 0 = perfect, 1 = 100% of words wrong
 
+                if type(config_data.text_gt) != type(asr_text):
+                    tqdm.write(f"[!] WER TYPE WARNING: Ground Truth is {type(config_data.text_gt)} but ASR is {type(asr_text)}")
+
                 wer = jiwer.wer(
                     config_data.text_gt,
                     asr_text,
@@ -266,6 +270,7 @@ def run_optimization_generation(config_data, model_data, audio_data, embedding_d
                     hypothesis_transform=model_data.wer_transformations,
                 )
                 val = float(wer)
+                val = min(val, 1.0) # Clamp to (0, 1)
                 val = -val + 1.0
 
                 gen_scores[FitnessObjective.WER_GT].append(val)

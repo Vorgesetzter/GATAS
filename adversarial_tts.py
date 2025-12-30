@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 
 # Import your new specialized modules
-from model_loader import initialize_environment
+from model_loader import initialize_environment, load_optimizer
 from core_logic import run_optimization_generation
 from reporting import finalize_run
 
@@ -12,39 +12,24 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Adversarial TTS Optimization Executable")
 
     # String parameters
-    parser.add_argument("--ground_truth_text", type=str, default="I think the NFL is lame and boring",
-                        help="The ground truth text input.")
-    parser.add_argument("--target_text", type=str, default="The Seattle Seahawks are the best Team in the world",
-                        help="The target text input.")
+    parser.add_argument("--ground_truth_text", type=str, default="I think the NFL is lame and boring", help="The ground truth text input.")
+    parser.add_argument("--target_text", type=str, default="The Seattle Seahawks are the best Team in the world", help="The target text input.")
 
     # Numeric parameters
-    parser.add_argument("--loop_count", type=int, default=1, help="The loop count to use.")
-    parser.add_argument("--num_generations", type=int, default=4,
-                        help="Number of generations for the optimizer.")
-    parser.add_argument("--pop_size", type=int, default=4,
-                        help="Population size.")
-    parser.add_argument("--iv_scalar", type=float, default=0.5,
-                        help="Interpolation vector scalar.")
-    parser.add_argument("--size_per_phoneme", type=int, default=1,
-                        help="Size per phoneme.")
+    parser.add_argument("--loop_count", type=int, default=10, help="The loop count to use.")
+    parser.add_argument("--num_generations", type=int, default=200, help="Number of generations for the optimizer.")
+    parser.add_argument("--pop_size", type=int, default=200, help="Population size.")
+    parser.add_argument("--iv_scalar", type=float, default=0.5, help="Interpolation vector scalar.")
+    parser.add_argument("--size_per_phoneme", type=int, default=1, help="Size per phoneme.")
 
     # Boolean parameters
-    parser.add_argument("--notify", action="store_true",
-                        help="If set, sends a WhatsApp notification upon completion.")
-    parser.add_argument("--subspace_optimization", action="store_true",
-                        help="If set, does subspace optimization for the embedding vector.")
+    parser.add_argument("--notify", action="store_true", help="If set, sends a WhatsApp notification upon completion.")
+    parser.add_argument("--subspace_optimization", action="store_true", help="If set, does subspace optimization for the embedding vector.")
 
     # Enum/Selection parameters
-    parser.add_argument("--mode", type=str, default="TARGETED",
-                        choices=["TARGETED", "UNTARGETED", "NOISE_UNTARGETED"],
-                        help="Attack mode (case sensitive).")
-
-    parser.add_argument("--ACTIVE_OBJECTIVES", nargs="+", type=str,
-                        default=["PESQ", "WER_GT"],
-                        help="List of active objectives (e.g. PESQ WER_GT UTMOS).")
-
-    parser.add_argument("--thresholds", nargs='*', type=str, default=[],
-                        help="Early stopping thresholds. Format: OBJ=Val (e.g. --thresholds PESQ=0.35 WER_GT=0.05)")
+    parser.add_argument("--mode", type=str, default="TARGETED", choices=["TARGETED", "UNTARGETED", "NOISE_UNTARGETED"], help="Attack mode (case sensitive).")
+    parser.add_argument("--ACTIVE_OBJECTIVES", nargs="+", type=str, default=["PESQ", "WER_GT"], help="List of active objectives (e.g. PESQ WER_GT UTMOS).")
+    parser.add_argument("--thresholds", nargs='*', type=str, default=["PESQ=0.2", "WER_GT=0.5"], help="Early stopping thresholds. Format: OBJ=Val (e.g. --thresholds PESQ=0.35 WER_GT=0.05)")
 
     return parser.parse_args()
 
@@ -76,9 +61,7 @@ def main():
         # This creates folders, saves audio, generates graphs, and sends notifications
         finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar, gen, device)
 
-        # Break outer loop if early stopping was triggered in the inner loop
-        if stop_optimization:
-            break
+        model_data.optimizer = load_optimizer(audio_data, config_data)
 
 if __name__ == "__main__":
     main()

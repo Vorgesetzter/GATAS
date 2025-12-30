@@ -27,7 +27,7 @@ def initialize_environment(args, device):
 
     audio_data = _generate_audio_data(config_data, tts_model, device)
 
-    optimizer = _load_optimizer(audio_data, config_data)
+    optimizer = load_optimizer(audio_data, config_data)
 
     model_data = ModelData(tts_model=tts_model, asr_model=asr_model, optimizer=optimizer)
 
@@ -160,7 +160,7 @@ def _generate_audio_data(config, tts, device):
 
     return AudioData(audio_gt, audio_target, h_text_gt, h_text_target, h_bert_raw_gt, h_bert_raw_target, h_bert_gt, h_bert_target, input_lengths, text_mask, style_ac_gt, style_pro_gt, noise)
 
-def _load_optimizer(audio_data, config_data):
+def load_optimizer(audio_data, config_data):
     print("Initializing Optimizer...")
     phoneme_count = audio_data.input_lengths.detach().cpu().item()
 

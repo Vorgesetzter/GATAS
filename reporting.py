@@ -4,6 +4,7 @@ import pandas as pd
 import soundfile as sf
 import requests
 from dotenv import load_dotenv
+from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -25,18 +26,12 @@ def finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar
 
     folder_path = os.path.join("outputs", "h_text", objectives_str, timestamp)
     os.makedirs(folder_path, exist_ok=True)
-    print(f"Results saved to: {folder_path}")
 
     # 2. Plot Graphs
     _generate_all_visualizations(config_data, fitness_data, folder_path)
 
     # 3. Get Best Candidate & Run Inference
     best_candidate = _select_best_candidate(model_data.optimizer.best_candidates)
-
-    print("Best candidate fitness values:")
-    for obj, score in zip(config_data.active_objectives, best_candidate.fitness):
-        print(f"  {obj.name}: {score:.6f}")
-    print()
 
     best_mixed_audio = _run_final_inference(
         best_candidate, model_data.tts_model, model_data.asr_model, audio_data, config_data, device
@@ -51,9 +46,6 @@ def finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar
     # 6. Notify (WhatsApp)
     if config_data.notify:
         _send_whatsapp_notification()
-
-    print("Done.")
-
 
 # ================= INTERNAL HELPERS =================
 
@@ -138,7 +130,6 @@ def _generate_pareto_population_graph(total_fitness, active_objectives, folder_p
     save_path = os.path.join(folder_path, "pareto_evolution_single.png")
     plt.savefig(save_path, dpi=300)
     plt.close()
-    print(f"Pareto graph saved to: {save_path}")
 
 def _get_local_pareto_front(fitness_matrix: np.ndarray) -> np.ndarray:
     """Returns only the non-dominated rows from a fitness matrix."""
@@ -178,7 +169,6 @@ def _generate_mean_population_graph(mean_history, active_objectives, folder_path
     save_path = os.path.join(folder_path, "mean_fitness_stack.png")
     plt.savefig(save_path, dpi=300)
     plt.close()
-    print(f"Mean population graph saved to: {save_path}")
 
 
 def _generate_total_population_graph(history_pop_fitness, active_objectives, folder_path):
@@ -187,12 +177,12 @@ def _generate_total_population_graph(history_pop_fitness, active_objectives, fol
     Uses Jitter to reveal stacked/duplicate individuals.
     """
     if len(active_objectives) < 2:
-        print("Skipping Population Cloud Graph: Requires at least 2 active objectives.")
+        tqdm.write("Skipping Population Cloud Graph: Requires at least 2 active objectives.")
         return
 
     total_gens = len(history_pop_fitness)
     if total_gens == 0:
-        print("Skipping Population Cloud Graph: History is empty.")
+        tqdm.write("Skipping Population Cloud Graph: History is empty.")
         return
 
     # 1. Determine which 4 generations to plot (Start -> End)
@@ -248,7 +238,6 @@ def _generate_total_population_graph(history_pop_fitness, active_objectives, fol
     save_path = os.path.join(folder_path, "population_cloud_evolution.png")
     plt.savefig(save_path, dpi=300)
     plt.close()
-    print(f"Population cloud graph saved to: {save_path}")
 
 def _select_best_candidate(candidates):
     """
@@ -424,12 +413,12 @@ def _send_whatsapp_notification():
     text = "Optimization finished! Check the results folder."
 
     if not phone or not apikey:
-        print("[!] Cannot send WhatsApp: Missing env variables.")
+        tqdm.write("[!] Cannot send WhatsApp: Missing env variables.")
         return
 
     url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={text}&apikey={apikey}"
     try:
         requests.get(url, timeout=10)
-        print("WhatsApp notification sent.")
+        tqdm.write("WhatsApp notification sent.")
     except Exception as e:
-        print(f"Error sending WhatsApp: {e}")
+        tqdm.write(f"Error sending WhatsApp: {e}")
