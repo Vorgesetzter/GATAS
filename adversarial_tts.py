@@ -17,8 +17,8 @@ def parse_arguments():
 
     # Numeric parameters
     parser.add_argument("--loop_count", type=int, default=1, help="The loop count to use.")
-    parser.add_argument("--num_generations", type=int, default=8, help="Number of generations for the optimizer.")
-    parser.add_argument("--pop_size", type=int, default=8, help="Population size.")
+    parser.add_argument("--num_generations", type=int, default=4, help="Number of generations for the optimizer.")
+    parser.add_argument("--pop_size", type=int, default=4, help="Population size.")
     parser.add_argument("--iv_scalar", type=float, default=0.5, help="Interpolation vector scalar.")
     parser.add_argument("--size_per_phoneme", type=int, default=1, help="Size per phoneme.")
 
@@ -62,5 +62,16 @@ def main():
 
         model_data.optimizer = load_optimizer(audio_data, config_data)
 
+
 if __name__ == "__main__":
+    import cProfile
+
+    # Wir erstellen einen Profiler, der nur das main() aufzeichnet
+    profiler = cProfile.Profile()
+    profiler.enable()
+
     main()
+
+    profiler.disable()
+    # Speichert die Ergebnisse direkt in die Datei
+    profiler.dump_stats("program.prof")
