@@ -19,11 +19,12 @@ class ConfigData:
     loop_count: int
     iv_scalar: float
     size_per_phoneme: int
+    batch_size: int
     notify: bool
 
     # --- Logic Constants ---
     mode: AttackMode
-    active_objectives: Set[FitnessObjective]
+    active_objectives: List[FitnessObjective]
     thresholds: Dict[FitnessObjective, float]
     objective_order: List[FitnessObjective]
 
@@ -108,7 +109,6 @@ class AudioData:
 class BestMixedAudio:
     audio: torch.Tensor
     text: str
-    logprob: float
     h_text: torch.Tensor
     h_bert: torch.Tensor
 

@@ -1,13 +1,13 @@
 import jiwer
 import numpy as np
 import torch
+import whisper
 from huggingface_hub import hf_hub_download
 from sentence_transformers import SentenceTransformer
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, Wav2Vec2Model, Wav2Vec2Processor
 
 # Local imports
 from Models.styletts2 import StyleTTS2
-from Models.asr_model import AutomaticSpeechRecognitionModel
 from helper import addNumbersPattern
 
 # Import Pymoo components
@@ -40,7 +40,7 @@ def _load_configuration(args, device):
     # 1. Set Constants & Configuration
     objective_order: list[FitnessObjective] = [
         FitnessObjective.PHONEME_COUNT,
-        FitnessObjective.AVG_LOGPROB,
+        # FitnessObjective.AVG_LOGPROB,
         FitnessObjective.UTMOS,
         FitnessObjective.PPL,
         FitnessObjective.PESQ,
@@ -91,6 +91,9 @@ def _load_configuration(args, device):
                 print(f"Error parsing threshold '{t}': {e}")
                 return None
 
+    if args.batch_size > args.pop_size or args.batch_size <= 0:
+        args.batch_size = args.pop_size
+
     # === CREATE CONFIG OBJECT ===
     return ConfigData(
         text_gt=args.ground_truth_text,
@@ -100,6 +103,7 @@ def _load_configuration(args, device):
         loop_count=args.loop_count,
         iv_scalar=args.iv_scalar,
         size_per_phoneme=args.size_per_phoneme,
+        batch_size = args.batch_size,
         notify=args.notify,
         mode=mode,
         active_objectives=active_objectives,
@@ -119,7 +123,7 @@ def _load_required_models(device):
     tts.sample_diffusion()
 
     print("Loading ASR Model...")
-    asr = AutomaticSpeechRecognitionModel("tiny", device=device)
+    asr = whisper.load_model("tiny", device=device)
 
     return tts, asr
 
@@ -155,8 +159,8 @@ def _generate_audio_data(config, tts, device):
     style_ac_target, style_pro_target = tts.computeStyleVector(noise, h_bert_raw_target, config.embedding_scale, config.diffusion_steps)
 
     # Run rest of inference for ground-truth and target
-    audio_gt = tts.inference_after_interpolation(input_lengths, text_mask, h_bert_gt, h_text_gt, style_ac_gt, style_pro_gt)
-    audio_target = tts.inference_after_interpolation(input_lengths, text_mask, h_bert_target, h_text_target, style_ac_target, style_pro_target)
+    audio_gt = tts.inference_after_interpolation_iterative(input_lengths, text_mask, h_bert_gt, h_text_gt, style_ac_gt, style_pro_gt)
+    audio_target = tts.inference_after_interpolation_iterative(input_lengths, text_mask, h_bert_target, h_text_target, style_ac_target, style_pro_target)
 
     return AudioData(audio_gt, audio_target, h_text_gt, h_text_target, h_bert_raw_gt, h_bert_raw_target, h_bert_gt, h_bert_target, input_lengths, text_mask, style_ac_gt, style_pro_gt, noise)
 

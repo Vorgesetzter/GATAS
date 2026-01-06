@@ -1,4 +1,36 @@
 from torch import Tensor
+import torch
+import whisper
+
+def _asr_batch_inference(asr_model, audio_batch, device):
+    """
+    Führt Whisper ASR auf einem Batch von Audio-Tensoren aus.
+    """
+    # 1. Padden/Trimmen & Log-Mel Spectrograms (Sequenziell ist ok, da sehr schnell)
+    mels = []
+    for audio in audio_batch:
+        # Whisper erwartet 30s Audio (16k * 30 = 480,000 Samples)
+        # Pad/Trim Logic
+        audio = whisper.pad_or_trim(audio)
+
+        # Log-Mel
+        mel = whisper.log_mel_spectrogram(audio).to(device)
+        mels.append(mel)
+
+    # 2. Stacken zu [Batch_Size, 80, 3000]
+    batch_mels = torch.stack(mels)
+
+    # 3. Batch Inferenz (Das ist der Speed-Boost!)
+    options = whisper.DecodingOptions(fp16=False, language='en')
+
+    # decode() gibt eine Liste von Results zurück
+    results = whisper.decode(asr_model, batch_mels, options)
+
+    # 4. Text & LogProbs extrahieren
+    texts = [r.text for r in results]
+    avg_logprobs = [r.avg_logprob for r in results]  # Whisper liefert avg_logprob direkt mit
+
+    return texts, avg_logprobs
 
 def length_to_mask(lengths: Tensor) -> Tensor:
     mask = torch.arange(lengths.max())  # Creates a Vector [0,1,2,3,...,x], where x = biggest value in lengths
@@ -35,66 +67,48 @@ def addNumbersPattern(a: Tensor, b: Tensor, pattern: list[int]) -> tuple[Tensor,
 
     return a, b
 
-import torch
-
 def _extend_to_size(x: torch.Tensor, target_size: int) -> torch.Tensor:
     """
-    Extends the last dimension of x to `target_size` by *repeating elements in order*.
-
-    Each position j in the original last dimension is repeated either
-    floor(target_size / a) or ceil(target_size / a) times, with the
-    first `target_size % a` positions getting the extra repeat.
-
-    Example (a = 4, target_size = 8):
-        [0.5, 0.9, 0.134, 0.542]
-        -> [0.5, 0.5, 0.9, 0.9, 0.134, 0.134, 0.542, 0.542]
-
-    Example (a = 5, target_size = 8):
-        [1, 2, 3, 4, 5]
-        -> [1, 1, 2, 2, 3, 3, 4, 5]
-
-    x: (p, a)
-    returns: (p, target_size)
+    Extends the last dimension of x to `target_size` by repeating elements.
+    Supports inputs of any dimension (e.g., [Batch, Dim] or [Batch, 1, Dim]).
     """
-    p, a = x.shape
+    # FIX: Get only the last dimension 'a', ignore preceding dimensions
+    a = x.shape[-1]
 
     # If already large enough, just crop
     if a >= target_size:
-        return x[:, :target_size]
+        return x[..., :target_size] # Use ... to keep all leading dimensions
 
     # How many repeats per original position?
-    base = target_size // a          # minimum repeats for each index
-    rem = target_size % a            # first `rem` indices get one extra repeat
+    base = target_size // a
+    rem = target_size % a
 
-
-    # repeats[i] = how often index i should appear
     repeats = torch.full((a,), base, device=x.device, dtype=torch.long)
     if rem > 0:
         repeats[:rem] += 1
 
-
-    # Build index pattern like:
-    # a=4, target=8 -> base=2, rem=0, repeats=[2,2,2,2]
-    # indices = [0,0,1,1,2,2,3,3]
+    # Build index pattern
     idx = torch.arange(a, device=x.device).repeat_interleave(repeats)
+    assert idx.numel() == target_size
 
-    # Safety: idx should be exactly target_size long
-    assert idx.numel() == target_size, f"idx has length {idx.numel()}, expected {target_size}"
-
-    # Apply same index pattern to all rows
-    return_vector = x[:, idx]
-    return return_vector
+    # Apply index pattern to the last dimension using Ellipsis (...)
+    return x[..., idx]
 
 def adjustInterpolationVector(IV: Tensor, matrix: Tensor, subspace_optimization: bool) -> Tensor:
 
     # Matrix Multiplication, since IV not Scalar Value
-    if IV.shape[1] != 1:
+    if IV.shape[-1] != 1:
         if subspace_optimization:
             IV = IV @ matrix
         else:
             IV = _extend_to_size(IV, 512)
 
-    IV = IV.permute(1, 0).unsqueeze(0)
+    # 1. Swap the last two dimensions (Works for [L, C] or [B, L, C])
+    IV = IV.transpose(-1, -2)
+
+    # 2. Add batch dimension only if it's missing (i.e., if it is 2D)
+    if IV.dim() < 3:
+        IV = IV.unsqueeze(0)
 
     return IV
 

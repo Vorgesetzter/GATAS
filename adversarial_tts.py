@@ -1,7 +1,8 @@
 import torch
 import argparse
 from tqdm import tqdm
-
+import cProfile
+import os
 
 # Import your new specialized modules
 from Adversarial_TTS.model_loader import initialize_environment, load_optimizer
@@ -21,6 +22,7 @@ def parse_arguments():
     parser.add_argument("--pop_size", type=int, default=4, help="Population size.")
     parser.add_argument("--iv_scalar", type=float, default=0.5, help="Interpolation vector scalar.")
     parser.add_argument("--size_per_phoneme", type=int, default=1, help="Size per phoneme.")
+    parser.add_argument("--batch_size", type=int, default=-1, help="Batch size for inference. >1 for full batch.")
 
     # Boolean parameters
     parser.add_argument("--notify", action="store_true", help="If set, sends a WhatsApp notification upon completion.")
@@ -50,6 +52,8 @@ def main():
 
     # 4. Main Loop
     for iteration in tqdm(range(config_data.loop_count), desc="Total Progress"):
+        profiler = cProfile.Profile()
+        profiler.enable()
 
         # Run the generation loop (Core Logic)
         fitness_data, progress_bar, stop_optimization, gen = run_optimization_generation(
@@ -58,20 +62,12 @@ def main():
 
         # 5. Finalize and Save Results
         # This creates folders, saves audio, generates graphs, and sends notifications
-        finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar, gen, device)
+        folder_path = finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar, gen, device)
 
         model_data.optimizer = load_optimizer(audio_data, config_data)
 
+        profiler.disable()
+        profiler.dump_stats(os.path.join(folder_path, "performance_data.prof"))
 
 if __name__ == "__main__":
-    import cProfile
-
-    # Wir erstellen einen Profiler, der nur das main() aufzeichnet
-    profiler = cProfile.Profile()
-    profiler.enable()
-
     main()
-
-    profiler.disable()
-    # Speichert die Ergebnisse direkt in die Datei
-    profiler.dump_stats("program.prof")

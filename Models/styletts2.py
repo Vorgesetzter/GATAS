@@ -1,3 +1,4 @@
+import torch
 from torch import Tensor
 
 import phonemizer
@@ -115,7 +116,7 @@ class StyleTTS2:
 
         return tokens
 
-    def predictDuration(self, bert_encoder_with_style: Tensor, input_lengths: Tensor) -> Tensor:
+    def predictDurationIterative(self, bert_encoder_with_style: Tensor, input_lengths: Tensor) -> Tensor:
 
         # Duration Predictor, frames per phoneme
         d_pred, _ = self.model.predictor.lstm(bert_encoder_with_style)  # Model temporal dependencies between phonemes, LSTM = RNN
@@ -133,6 +134,63 @@ class StyleTTS2:
         for i in range(a_pred.size(0)):  # Iterates over phoneme
             a_pred[i, current_frame:current_frame + int(d_pred[i].data)] = 1  # Changes for row-i (the i-th phoneme) all the values from current_frame to current_frame + int(d_pred[i].data) to 1
             current_frame += int(d_pred[i].data)  # Move current_frame to new first start
+
+        return a_pred
+
+    import torch
+    from torch import Tensor
+
+    def predictDuration(self, bert_encoder_with_style: Tensor, input_lengths: Tensor) -> Tensor:
+        # 1. Transpose Input for LSTM
+        # Input: (Batch, Channels, Phonemes) -> (4, 512, 53)
+        # Target: (Batch, Phonemes, Channels) -> (4, 53, 512)
+        # x = bert_encoder_with_style.transpose(1, 2)
+
+        # 2. Duration Predictor
+        # d_pred shape: (Batch, Phonemes, Hidden_Size)
+        d_pred, _ = self.model.predictor.lstm(bert_encoder_with_style)
+
+        # Projection
+        d_pred = self.model.predictor.duration_proj(d_pred)
+
+        # 3. Process Durations (Preserving Batch Dim)
+        # Sum over the projection dimension (axis=-1) to get scalar duration
+        # Shape becomes: (Batch, Phonemes)
+        d_pred = torch.sigmoid(d_pred).sum(axis=-1)
+
+        # Round and Clamp
+        # Do NOT squeeze here, or you risk losing the batch dim if batch_size=1
+        d_pred = torch.round(d_pred).clamp(min=1)
+
+        # Add padding to the last phoneme of EVERY batch item
+        d_pred[:, -1] += 5
+
+        # 4. Create Alignment Matrix
+        batch_size = d_pred.size(0)
+        num_phonemes = d_pred.size(1)
+
+        # Calculate total frames for each sample in the batch
+        total_durations = d_pred.sum(dim=1).long()
+        # Find the max duration to set the matrix width (padding)
+        max_frames = total_durations.max().item()
+
+        # Initialize batch alignment matrix: (Batch, Phonemes, Max_Frames)
+        a_pred = torch.zeros(batch_size, num_phonemes, max_frames, device=d_pred.device)
+
+        # Fill matrix (Iterate over batch)
+        for b in range(batch_size):
+            current_frame = 0
+            durations = d_pred[b]  # Durations for this specific sample
+
+            # We limit the range to the actual input length of this sample
+            # (Assuming input_lengths is valid, otherwise use num_phonemes)
+            valid_phonemes = input_lengths[b].item() if input_lengths is not None else num_phonemes
+
+            for i in range(valid_phonemes):
+                dur = int(durations[i].item())
+                # Set the ones for the duration of this phoneme
+                a_pred[b, i, current_frame: current_frame + dur] = 1
+                current_frame += dur
 
         return a_pred
 
@@ -183,13 +241,13 @@ class StyleTTS2:
         return h_text, h_bert_raw, h_bert, input_lengths, text_mask
 
     @torch.no_grad()
-    def inference_after_interpolation(self, input_lengths: Tensor, text_mask: Tensor, h_bert: Tensor, h_text: Tensor, style_vector_acoustic: Tensor, style_vector_prosodic: Tensor) -> Tensor:
+    def inference_after_interpolation_iterative(self, input_lengths: Tensor, text_mask: Tensor, h_bert: Tensor, h_text: Tensor, style_vector_acoustic: Tensor, style_vector_prosodic: Tensor) -> Tensor:
 
         # AdaIN, Adding information of style vector to phoneme
         h_bert_with_style = self.model.predictor.text_encoder(h_bert, style_vector_acoustic, input_lengths, text_mask)
 
         # Function Call
-        a_pred = self.predictDuration(h_bert_with_style, input_lengths)
+        a_pred = self.predictDurationIterative( h_bert_with_style, input_lengths)
 
         # Multiply alignment matrix with h_text
         h_aligned = h_text @ a_pred.unsqueeze(0).to(self.device)
@@ -209,6 +267,29 @@ class StyleTTS2:
         return out.squeeze().cpu().numpy()
 
     @torch.no_grad()
+    def inference_after_interpolation_batches(self, input_lengths: Tensor, text_mask: Tensor, h_bert: Tensor, h_text: Tensor, style_vector_acoustic: Tensor, style_vector_prosodic: Tensor) -> Tensor:
+
+        h_bert_with_style = self.model.predictor.text_encoder(h_bert, style_vector_acoustic, input_lengths, text_mask)
+
+        a_pred = self.predictDuration(h_bert_with_style, input_lengths)
+        a_pred = a_pred.to(self.device)
+
+        h_aligned = h_text @ a_pred
+
+        h_bert_with_style_per_frame = h_bert_with_style.transpose(-1, -2) @ a_pred
+
+        f0_pred, n_pred = self.model.predictor.F0Ntrain(h_bert_with_style_per_frame, style_vector_acoustic)
+
+        out = self.model.decoder(
+            h_aligned,
+            f0_pred,
+            n_pred,
+            style_vector_prosodic
+        )
+
+        return out.squeeze(1).cpu().numpy()
+
+    @torch.no_grad()
     def inference(self, text: str, noise: Tensor, embedding_scale=1, diffusion_steps=5):
 
         tokens = self.preprocessText(text)
@@ -217,4 +298,4 @@ class StyleTTS2:
 
         style_vector_acoustic, style_vector_prosodic = self.computeStyleVector(noise, h_bert_raw, embedding_scale, diffusion_steps)
 
-        return self.inference_after_interpolation(input_lengths, text_mask, h_bert, h_text, style_vector_acoustic, style_vector_prosodic)
+        return self.inference_after_interpolation_iterative(input_lengths, text_mask, h_bert, h_text, style_vector_acoustic, style_vector_prosodic)

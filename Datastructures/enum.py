@@ -9,7 +9,7 @@ class FitnessObjective(Enum):
 
     # ==== Increase Naturalness ====
     PHONEME_COUNT = auto()
-    AVG_LOGPROB = auto()
+    # AVG_LOGPROB = auto()
     UTMOS = auto()
     PPL = auto()
     PESQ = auto()

@@ -16,7 +16,6 @@ from Datastructures.dataclass import *
 from helper import adjustInterpolationVector
 from Datastructures.enum import AttackMode
 
-
 def finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar, gen, device):
 
     # 1. Setup Directory
@@ -43,11 +42,13 @@ def finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar
     _save_artifacts(folder_path, best_mixed_audio, audio_data, config_data, best_candidate)
 
     # 5. Write Text Summary
-    _write_run_summary(folder_path, config_data, progress_bar, gen)
+    _write_run_summary(folder_path, config_data, best_mixed_audio, best_candidate, progress_bar, gen)
 
     # 6. Notify (WhatsApp)
     if config_data.notify:
         _send_whatsapp_notification()
+
+    return folder_path
 
 # ================= INTERNAL HELPERS =================
 
@@ -288,7 +289,7 @@ def _run_final_inference(best_candidate, tts_model, asr_model, audio_data, confi
 
     # Inference
     with torch.no_grad():
-        audio_best = tts_model.inference_after_interpolation(
+        audio_best = tts_model.inference_after_interpolation_iterative(
             audio_data.input_lengths,
             audio_data.text_mask,
             h_bert_mixed_best,
@@ -298,12 +299,11 @@ def _run_final_inference(best_candidate, tts_model, asr_model, audio_data, confi
         )
 
     # ASR Analysis
-    asr_result, asr_logprob = asr_model.analyzeAudio(audio_best)
+    asr_text = asr_model.transcribe(audio_best)["text"]
 
     return BestMixedAudio(
         audio=audio_best,
-        text=asr_result["text"].strip(),
-        logprob=float(asr_logprob),
+        text=asr_text,
         h_text=h_text_mixed_best,
         h_bert=h_bert_mixed_best
     )
@@ -330,7 +330,6 @@ def _save_artifacts(folder_path, best_mixed_audio, audio_data, config_data, best
 
         # 3. Results from Final Inference (BestMixedAudio)
         "asr_text": best_mixed_audio.text,
-        "asr_logprob": best_mixed_audio.logprob,
         "h_text_mixed_best": best_mixed_audio.h_text,
         "h_bert_mixed_best": best_mixed_audio.h_bert,
 
@@ -344,8 +343,7 @@ def _save_artifacts(folder_path, best_mixed_audio, audio_data, config_data, best
 
     torch.save(state_dict, os.path.join(folder_path, "best_vector.pt"))
 
-
-def _write_run_summary(folder_path: str, config_data: ConfigData, progress_bar, gen):
+def _write_run_summary(folder_path: str, config_data: ConfigData, best_mixed_audio, best_candidate, progress_bar, gen):
 
     # 1. Hardware Detection
     os_info = f"{platform.system()} {platform.release()}"
@@ -390,6 +388,15 @@ def _write_run_summary(folder_path: str, config_data: ConfigData, progress_bar, 
         f.write(f"{hardware_str}\n")
         f.write(f"Total Duration:    {elapsed:.2f}s\n")
         f.write(f"Avg per Gen:       {time_per_gen:.2f}s\n")
+
+        f.write(f"\n--- Best Candidate Fitness ---\n")
+        f.write(f"Generation Found:  {getattr(best_candidate, 'generation', 'Unknown')}\n\n")
+
+        for obj, score in zip(config_data.active_objectives, best_candidate.fitness):
+            f.write(f"  {obj.name}: {float(score):.6f}\n")
+
+        f.write(f"Transcription:     \"{best_mixed_audio.text}\"\n")
+
 
 def _send_whatsapp_notification():
     load_dotenv()
