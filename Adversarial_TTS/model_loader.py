@@ -49,6 +49,7 @@ def _load_configuration(args, device):
         FitnessObjective.WER_TARGET,
         FitnessObjective.SBERT_TARGET,
         FitnessObjective.TEXT_EMB_TARGET,
+        FitnessObjective.WHISPER_PROB,
         FitnessObjective.WER_GT,
         FitnessObjective.SBERT_GT,
         FitnessObjective.TEXT_EMB_GT,

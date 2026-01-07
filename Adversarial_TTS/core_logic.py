@@ -9,6 +9,7 @@ from sentence_transformers import util
 from pesq import pesq
 from tqdm import tqdm
 import whisper
+from whisper.tokenizer import get_tokenizer
 
 from Datastructures.dataclass import FitnessData
 from Datastructures.enum import AttackMode, FitnessObjective
@@ -34,16 +35,27 @@ def run_optimization_generation(config_data, model_data, audio_data, embedding_d
     progress_bar = tqdm(range(config_data.num_generations), desc=f"Current Generation {iteration + 1}", leave=False)
     gen = -1
 
+    target_tokens_template = None
+    if FitnessObjective.WHISPER_PROB in active_objectives:
+        # Loads Tokenizer
+        tokenizer = get_tokenizer(asr_model.is_multilingual)
+
+        # Converts text to tokens, while adding start and end tokens
+        target_ids = list(tokenizer.sot_sequence) + tokenizer.encode(config_data.text_target) + [tokenizer.eot]
+
+        target_tokens_template = torch.tensor([target_ids]).to(asr_model.device)
+
     for gen in progress_bar:
 
         gen_scores: dict[FitnessObjective, list[float]] = {obj: [] for obj in active_objectives}
         interpolation_vectors_full = torch.from_numpy(model_data.optimizer.get_x_current()).to(device).float()
+        options = whisper.DecodingOptions()
 
-        for batch in range(0, config_data.pop_size, batch_size):
+        for batch_idx in range(0, config_data.pop_size, batch_size):
 
             # 1. Inference
             # Returns [Batch, Audio_Length]
-            audio_mixed_batch, current_batch_size, interpolation_vectors = model_data.tts_model.inference_on_interpolation_vectors(interpolation_vectors_full, batch, batch_size, config_data, audio_data)
+            audio_mixed_batch, current_batch_size, interpolation_vectors = model_data.tts_model.inference_on_interpolation_vectors(interpolation_vectors_full, batch_idx, batch_size, config_data, audio_data)
 
             # 2. Prepare Input Tensor for ASR
             audio_tensor = torch.from_numpy(audio_mixed_batch).squeeze(1).float().to(device)
@@ -53,8 +65,34 @@ def run_optimization_generation(config_data, model_data, audio_data, embedding_d
             # 3. Create Log Mel Spectrogram
             mel_batch = whisper.log_mel_spectrogram(audio_tensor, n_mels=asr_model.dims.n_mels).to(device)
 
-            # 4. Extract Text from Log Mel Spectrogram
-            options = whisper.DecodingOptions()
+            batch_whisper_fitness_values = [None] * current_batch_size
+
+            if FitnessObjective.WHISPER_PROB in active_objectives:
+                target_tokens_batch = target_tokens_template.expand(current_batch_size, -1)
+
+                with torch.no_grad():
+                    logits = asr_model(mel_batch, target_tokens_batch)
+
+                # Remove start and end token
+                logits_shifted = logits[:, :-1, :]
+                targets_shifted = target_tokens_batch[:, 1:]
+
+                # reduction='none' is CRITICAL. It ensures we get one loss value per audio file.
+                loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
+
+                # Reshape to (Batch*SeqLen, Vocab) for the loss function, then reshape back
+                raw_losses = loss_fct(logits_shifted.reshape(-1, logits_shifted.size(-1)), targets_shifted.reshape(-1))
+
+                # Average loss over the sentence length to get score per audio file
+                sample_losses = raw_losses.reshape(current_batch_size, -1).mean(dim=1)
+
+                # D. Convert to "Fitness Score" (0.0 = Best, 1.0 = Worst)
+                # exp(-loss) gives probability (0 to 1). We invert it.
+                probs = torch.exp(-sample_losses)
+                vals = 1.0 - probs
+
+                batch_whisper_fitness_values = vals.detach().cpu().tolist()
+
             results = whisper.decode(asr_model, mel_batch, options)
 
 
@@ -64,6 +102,8 @@ def run_optimization_generation(config_data, model_data, audio_data, embedding_d
                 audio_mixed = audio_mixed_batch[i]  # [Audio_Len]
                 asr_text = results[i].text  # Dict
                 interpolation_vector = interpolation_vectors[i]  # [Dim]
+
+                whisper_fitness_val = batch_whisper_fitness_values[i]
 
                 # Initialize dictionary using Enum keys type hint
                 current_ind_scores: dict[FitnessObjective, float] = {}
@@ -81,7 +121,7 @@ def run_optimization_generation(config_data, model_data, audio_data, embedding_d
 
                 asr_text = clean_text
 
-                computeFitnessValues(audio_data, model_data, config_data, embedding_data, gen_scores, current_ind_scores, asr_text, audio_mixed, interpolation_vector, device)
+                computeFitnessValues(audio_data, model_data, config_data, embedding_data, gen_scores, current_ind_scores, asr_text, audio_mixed, whisper_fitness_val, interpolation_vector, device)
 
                 # ==== EARLY STOPPING CHECK ====
                 # Only run this logic if the user actually provided thresholds via terminal
@@ -103,7 +143,6 @@ def run_optimization_generation(config_data, model_data, audio_data, embedding_d
                     # If we survived the loop above, this individual passed all checks
                     if meets_all_criteria:
                         stop_optimization = True
-
 
         # 3. Calculate per-generation means
         gen_mean: dict[str, float] = {"Generation": gen}
@@ -139,7 +178,7 @@ def run_optimization_generation(config_data, model_data, audio_data, embedding_d
     return FitnessData(mean_fitness_history, pareto_fitness_history, total_fitness_history), progress_bar, stop_optimization, gen
 
 
-def computeFitnessValues(audio_data, model_data, config_data, embedding_data, gen_scores, current_ind_scores, asr_text, audio_mixed, interpolation_vector, device):
+def computeFitnessValues(audio_data, model_data, config_data, embedding_data, gen_scores, current_ind_scores, asr_text, audio_mixed, whisper_target_prob, interpolation_vector, device):
 
     # ==== Extract Data ====
     tts_model = model_data.tts_model
@@ -297,6 +336,18 @@ def computeFitnessValues(audio_data, model_data, config_data, embedding_data, ge
 
         gen_scores[FitnessObjective.TEXT_EMB_TARGET].append(val)
         current_ind_scores[FitnessObjective.TEXT_EMB_TARGET] = val
+
+    if FitnessObjective.WHISPER_PROB in active_objectives:
+
+        # whisper_prob = whisper_model.log_prob(asr_text).exp().item()
+        # Values: [0, 1]
+        # 0 = ASR very different to Target, 1 = ASR same as Target
+
+        val = whisper_target_prob
+
+        gen_scores[FitnessObjective.WHISPER_PROB].append(val)
+        current_ind_scores[FitnessObjective.WHISPER_PROB] = val
+
 
     # ==== Optimize Text Away From Ground-Truth ====
     if FitnessObjective.WER_GT in active_objectives:

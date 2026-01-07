@@ -9,7 +9,6 @@ class FitnessObjective(Enum):
 
     # ==== Increase Naturalness ====
     PHONEME_COUNT = auto()
-    # AVG_LOGPROB = auto()
     UTMOS = auto()
     PPL = auto()
     PESQ = auto()
@@ -22,6 +21,7 @@ class FitnessObjective(Enum):
     WER_TARGET = auto()
     SBERT_TARGET = auto()
     TEXT_EMB_TARGET = auto()
+    WHISPER_PROB = auto()
 
     # ==== Optimize Text Away From Ground-Truth ====
     WER_GT = auto()

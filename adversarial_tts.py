@@ -18,11 +18,11 @@ def parse_arguments():
 
     # Numeric parameters
     parser.add_argument("--loop_count", type=int, default=1, help="The loop count to use.")
-    parser.add_argument("--num_generations", type=int, default=150, help="Number of generations for the optimizer.")
-    parser.add_argument("--pop_size", type=int, default=200, help="Population size.")
+    parser.add_argument("--num_generations", type=int, default=4, help="Number of generations for the optimizer.")
+    parser.add_argument("--pop_size", type=int, default=4, help="Population size.")
     parser.add_argument("--iv_scalar", type=float, default=0.5, help="Interpolation vector scalar.")
     parser.add_argument("--size_per_phoneme", type=int, default=1, help="Size per phoneme.")
-    parser.add_argument("--batch_size", type=int, default=100, help="Batch size for inference. >1 for full batch.")
+    parser.add_argument("--batch_size", type=int, default=-1, help="Batch size for inference. >1 for full batch.")
 
     # Boolean parameters
     parser.add_argument("--notify", action="store_true", help="If set, sends a WhatsApp notification upon completion.")
@@ -30,8 +30,8 @@ def parse_arguments():
 
     # Enum/Selection parameters
     parser.add_argument("--mode", type=str, default="TARGETED", choices=["TARGETED", "UNTARGETED", "NOISE_UNTARGETED"], help="Attack mode (case sensitive).")
-    parser.add_argument("--ACTIVE_OBJECTIVES", nargs="+", type=str, default=["PESQ", "WER_GT"], help="List of active objectives (e.g. PESQ WER_GT UTMOS).")
-    parser.add_argument("--thresholds", nargs='*', type=str, default=["PESQ=0.3 ", "WER_GT=0.25"], help="Early stopping thresholds. Format: OBJ=Val (e.g. --thresholds PESQ=0.35 WER_GT=0.05)")
+    parser.add_argument("--ACTIVE_OBJECTIVES", nargs="+", type=str, default=["PESQ", "WHISPER_PROB"], help="List of active objectives (e.g. PESQ WER_GT UTMOS).")
+    parser.add_argument("--thresholds", nargs='*', type=str, default=["PESQ=0.3 ", "WHISPER_PROB=0.25"], help="Early stopping thresholds. Format: OBJ=Val (e.g. --thresholds PESQ=0.35 WER_GT=0.05)")
 
     return parser.parse_args()
 

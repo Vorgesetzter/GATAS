@@ -393,7 +393,7 @@ def _write_run_summary(folder_path: str, config_data: ConfigData, best_mixed_aud
         for obj, score in zip(config_data.active_objectives, best_candidate.fitness):
             f.write(f"  {obj.name}: {float(score):.6f}\n")
 
-        f.write(f"Transcription:     \"{best_mixed_audio.text}\"\n")
+        f.write(f"Transcription: \"{best_mixed_audio.text}\"\n")
 
 
 def _send_whatsapp_notification():
