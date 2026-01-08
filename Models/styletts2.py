@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 from torch import Tensor
 
 import phonemizer
@@ -96,6 +97,33 @@ class StyleTTS2:
             sigma_schedule=KarrasSchedule(sigma_min=0.0001, sigma_max=3.0, rho=9.0),  # empirical parameters
             clamp=False
         )
+
+    def enable_multi_gpu(self):
+        """
+        Wrap model components in DataParallel for multi-GPU inference.
+        Should be called after load_models() and load_checkpoints().
+
+        Note: Only the decoder is wrapped since it's the heaviest component.
+        The predictor uses nested attribute access which doesn't work with DataParallel.
+        """
+        if not torch.cuda.is_available() or torch.cuda.device_count() <= 1:
+            print("[WARNING] Multi-GPU requested but not available. Skipping.")
+            return
+
+        gpu_count = torch.cuda.device_count()
+        print(f"[INFO] Enabling multi-GPU for StyleTTS2 ({gpu_count} GPUs)")
+
+        # Wrap the decoder - it's the most compute-intensive component
+        # and doesn't use nested attribute access
+        if hasattr(self.model, 'decoder') and not isinstance(self.model.decoder, nn.DataParallel):
+            self.model.decoder = nn.DataParallel(self.model.decoder)
+            print(f"  - Decoder wrapped in DataParallel")
+
+        # Note: predictor, text_encoder, bert_encoder are NOT wrapped because
+        # they use nested attribute access (e.g., self.model.predictor.text_encoder)
+        # which doesn't work with DataParallel wrappers
+
+        self._multi_gpu_enabled = True
 
     # Turns text to tensor with token ID
     def preprocess_text(self, text: str) -> Tensor:

@@ -22,7 +22,7 @@ def finalize_run(config_data, fitness_data, model_data, audio_data, progress_bar
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
     objectives_str = "_".join([obj.name for obj in config_data.active_objectives]) if config_data.active_objectives else "NONE"
 
-    folder_path = os.path.join("outputs", "h_text", objectives_str, timestamp)
+    folder_path = os.path.join("outputs", objectives_str, timestamp)
     os.makedirs(folder_path, exist_ok=True)
 
     # 2. Plot Graphs
@@ -273,7 +273,7 @@ def _run_final_inference(best_candidate, tts_model, asr_model, audio_data, confi
     # Extract & Adjust Vector
     best_vector = torch.from_numpy(best_candidate.solution).to(device).float()
     best_vector = best_vector.view(phoneme_count, config_data.size_per_phoneme)
-    best_vector = adjustInterpolationVector(best_vector, config_data.random_matrix, config_data.size_per_phoneme)
+    best_vector = adjustInterpolationVector(best_vector, config_data.random_matrix, config_data.subspace_optimization)
 
     # Mix Embeddings
     if config_data.mode is AttackMode.NOISE_UNTARGETED or config_data.mode is AttackMode.TARGETED:

@@ -36,6 +36,9 @@ class ConfigData:
     subspace_optimization: bool
     random_matrix: torch.Tensor
 
+    # --- Hardware ---
+    multi_gpu: bool = False
+
     def print_summary(self):
         """Prints the formatted configuration to console."""
         print("=== Configuration ===")
@@ -57,6 +60,13 @@ class ConfigData:
             print(f"Thresholds:        {', '.join(t_list)}")
         else:
             print("Thresholds:        None (Running full generations)")
+
+        if self.multi_gpu:
+            import torch
+            gpu_count = torch.cuda.device_count()
+            print(f"Multi-GPU:         Enabled ({gpu_count} GPUs)")
+        else:
+            print(f"Multi-GPU:         Disabled")
 
         print("=====================")
 

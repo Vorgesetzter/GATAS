@@ -1,6 +1,10 @@
 from torch import Tensor
 import torch
 import whisper
+import numpy as np
+import requests
+from dotenv import load_dotenv
+
 
 def _asr_batch_inference(asr_model, audio_batch, device):
     """
@@ -111,4 +115,64 @@ def adjustInterpolationVector(IV: Tensor, matrix: Tensor, subspace_optimization:
         IV = IV.unsqueeze(0)
 
     return IV
+
+def get_local_pareto_front(fitness_matrix):
+    """Returns only the non-dominated rows from a fitness matrix."""
+    is_efficient = np.ones(fitness_matrix.shape[0], dtype=bool)
+    for i, c in enumerate(fitness_matrix):
+        if is_efficient[i]:
+            # Keep only individuals not dominated by others
+            # (Assuming minimization; if PESQ is maximized, multiply it by -1 first)
+            is_efficient[is_efficient] = np.any(fitness_matrix[is_efficient] < c, axis=1)
+            is_efficient[i] = True
+    return fitness_matrix[is_efficient]
+
+
+def calculate_2d_hypervolume(pareto_front, ref_point):
+    """
+    Calculates the area (Hypervolume) for a 2D Pareto front.
+    pareto_front: np.ndarray of shape (N, 2)
+    ref_point: list or array [r1, r2] (the 'worst' possible values)
+    """
+    if pareto_front.size == 0:
+        return 0.0
+
+    # 1. Sort the front by the first objective
+    front = pareto_front[pareto_front[:, 0].argsort()]
+
+    # 2. Ensure all points are within the reference point bounds
+    # (Ignore points worse than the reference point)
+    mask = (front[:, 0] <= ref_point[0]) & (front[:, 1] <= ref_point[1])
+    front = front[mask]
+
+    if len(front) == 0:
+        return 0.0
+
+    # 3. Calculate the area of the rectangles
+    area = 0.0
+    last_y = ref_point[1]
+
+    for x, y in front:
+        # Area = Width (distance to ref_x) * Height (distance between steps)
+        area += (ref_point[0] - x) * (last_y - y)
+        last_y = y
+
+    return area
+
+def send_whatsapp_notification():
+    load_dotenv()
+    phone = os.getenv("WHATSAPP_PHONE_NUMBER")
+    apikey = os.getenv("WHATSAPP_API_KEY")
+    text = "Optimization finished! Check the results folder."
+
+    if not phone or not apikey:
+        tqdm.write("[!] Cannot send WhatsApp: Missing env variables.")
+        return
+
+    url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={text}&apikey={apikey}"
+    try:
+        requests.get(url, timeout=10)
+        tqdm.write("WhatsApp notification sent.")
+    except Exception as e:
+        tqdm.write(f"Error sending WhatsApp: {e}")
 

@@ -93,7 +93,6 @@ def _get_objective_class(objective_enum: FitnessObjective) -> Type[BaseObjective
     else:
         raise ValueError(f"Unknown objective: {objective_enum}")
 
-
 def get_objective(
     objective_enum: FitnessObjective,
     config,

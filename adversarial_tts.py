@@ -12,7 +12,7 @@ import cProfile
 import os
 
 # Import specialized modules
-from Adversarial_TTS.model_loader import initialize_environment, load_optimizer
+from Trainer.ModelLoader import initialize_environment, load_optimizer
 from Adversarial_TTS.core_logic import run_optimization_generation
 from Adversarial_TTS.reporting import finalize_run
 
@@ -91,8 +91,6 @@ def main():
 
     # 3. Main optimization loop
     for iteration in tqdm(range(config_data.loop_count), desc="Total Progress"):
-        profiler = cProfile.Profile()
-        profiler.enable()
 
         # Run the generation loop with ObjectiveManager
         fitness_data, progress_bar, stop_optimization, gen = run_optimization_generation(
@@ -106,15 +104,12 @@ def main():
         )
 
         # 4. Finalize and save results
-        folder_path = finalize_run(
+        finalize_run(
             config_data, fitness_data, model_data, audio_data, progress_bar, gen, device
         )
 
         # Reset optimizer for next iteration
         model_data.optimizer = load_optimizer(audio_data, config_data)
-
-        profiler.disable()
-        profiler.dump_stats(os.path.join(folder_path, "performance_data.prof"))
 
 
 if __name__ == "__main__":
