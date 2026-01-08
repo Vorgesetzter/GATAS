@@ -10,6 +10,7 @@ Logging and visualization should be handled separately via RunLogger.
 """
 
 import time
+import sys
 import re
 import torch
 import numpy as np
@@ -194,6 +195,9 @@ class AdversarialTrainer:
             mean_fitness_history.append(gen_mean)
             total_fitness_history.append(total_fitness)
             pareto_fitness_history.append(current_front)
+
+            progress_bar.update(1)
+            sys.stdout.flush()
 
             if stop_optimization:
                 print(f"\n[!] Early Stopping at Generation {gen + 1} (Thresholds met).")
