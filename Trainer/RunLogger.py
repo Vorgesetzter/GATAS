@@ -151,7 +151,13 @@ class RunLogger:
                 self.audio.style_vector_prosodic
             )
 
-        asr_text = self.models.asr_model.transcribe(audio_best)["text"]
+        if isinstance(self.models.asr_model, torch.nn.DataParallel):
+            asr_model = self.models.asr_model.module
+        else:
+            asr_model = self.models.asr_model
+
+        # 2. Now call transcribe on the unwrapped model
+        asr_text = asr_model.transcribe(audio_best)["text"]
 
         return BestMixedAudio(
             audio=audio_best,

@@ -3,7 +3,7 @@ from pycallgraph2 import Config
 from pycallgraph2.output import GraphvizOutput
 from pycallgraph2.globbing_filter import GlobbingFilter
 
-from adversarial_tts import main  # Import your actual main function
+from Scripts.adversarial_tts_classes import main  # Import your actual main function
 
 
 def run_viz():
