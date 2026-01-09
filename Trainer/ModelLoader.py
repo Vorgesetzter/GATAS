@@ -26,8 +26,9 @@ from pymoo.algorithms.moo.nsga2 import NSGA2
 from Datastructures.dataclass import ModelData, ConfigData, AudioData, EmbeddingData
 from Datastructures.enum import FitnessObjective, AttackMode
 
-# Import ObjectiveManager
+# Import ObjectiveManager and registry
 from Objectives.manager import ObjectiveManager
+from Objectives.registry import ensure_all_registered, get_all_objective_enums
 
 
 class EnvironmentLoader:
@@ -35,16 +36,9 @@ class EnvironmentLoader:
         self.args = args
         self.device = device
 
-        # Define the global objective order (Source of truth)
-        self.objective_order: list[FitnessObjective] = [
-            FitnessObjective.PHONEME_COUNT, FitnessObjective.UTMOS, FitnessObjective.PPL,
-            FitnessObjective.PESQ, FitnessObjective.L1, FitnessObjective.L2,
-            FitnessObjective.WER_TARGET, FitnessObjective.SBERT_TARGET,
-            FitnessObjective.TEXT_EMB_TARGET, FitnessObjective.WHISPER_PROB,
-            FitnessObjective.WER_GT, FitnessObjective.SBERT_GT,
-            FitnessObjective.TEXT_EMB_GT, FitnessObjective.WAV2VEC_SIMILAR,
-            FitnessObjective.WAV2VEC_DIFFERENT, FitnessObjective.WAV2VEC_ASR,
-        ]
+        # Ensure all objectives are registered, then get their order
+        ensure_all_registered()
+        self.objective_order: list[FitnessObjective] = get_all_objective_enums()
 
     def initialize(self):
         """

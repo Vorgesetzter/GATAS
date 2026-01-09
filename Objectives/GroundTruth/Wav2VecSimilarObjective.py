@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from transformers import Wav2Vec2Model, Wav2Vec2Processor
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class Wav2VecSimilarObjective(BaseObjective):
@@ -17,6 +18,7 @@ class Wav2VecSimilarObjective(BaseObjective):
     We convert to fitness: 0 = same as GT (good), 1 = different (bad).
     (We want to sound SIMILAR to ground-truth)
     """
+    objective_type = FitnessObjective.WAV2VEC_SIMILAR
 
     def __init__(self, config, model_data: ModelData, device: str = None, embedding_data=None):
         super().__init__(config, model_data)

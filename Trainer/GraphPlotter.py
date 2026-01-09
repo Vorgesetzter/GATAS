@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+from matplotlib.collections import LineCollection
+from scipy.interpolate import interp1d
 import numpy as np
 import os
 import pandas as pd
@@ -17,6 +19,37 @@ class GraphPlotter:
         # 2. Pre-calculate colors for EVERY generation
         # This ensures Gen X is always the same color in every function
         self.colors = self.cmap(np.linspace(0, 1, total_generations))
+
+    def _create_gradient_line(self, ax, x_data, y_data, num_interp_points=500):
+        """
+        Create a line with continuous color gradient using interpolation.
+
+        Args:
+            ax: Matplotlib axis to plot on
+            x_data: X coordinates (e.g., generations)
+            y_data: Y coordinates (e.g., fitness values)
+            num_interp_points: Number of points to interpolate for smooth gradient
+        """
+        # Interpolate to create smooth gradient
+        x_smooth = np.linspace(x_data.min(), x_data.max(), num_interp_points)
+        interpolator = interp1d(x_data, y_data, kind='linear')
+        y_smooth = interpolator(x_smooth)
+
+        # Create segments for LineCollection
+        points = np.array([x_smooth, y_smooth]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+
+        # Normalize colors across the full range
+        norm = plt.Normalize(x_data.min(), x_data.max())
+        lc = LineCollection(segments, cmap=self.cmap, norm=norm)
+        lc.set_array(x_smooth[:-1])
+        lc.set_linewidth(2.5)
+        ax.add_collection(lc)
+
+        # Set axis limits
+        y_margin = 0.05 * (y_data.max() - y_data.min() + 1e-6)
+        ax.set_xlim(x_data.min(), x_data.max())
+        ax.set_ylim(y_data.min() - y_margin, y_data.max() + y_margin)
 
     def generate_all_visualizations(self, fitness):
 
@@ -88,7 +121,7 @@ class GraphPlotter:
 
         # Define x-axis based on the actual length of the data received
         actual_gens = len(df)
-        generations = np.arange(actual_gens)
+        generations = np.arange(actual_gens, dtype=float)
 
         # 2. Setup Plot
         num_objectives = len(active_objectives)
@@ -97,16 +130,10 @@ class GraphPlotter:
 
         for i, obj in enumerate(active_objectives):
             ax = axs[i, 0]
-            y_values = df[obj.name].values
+            y_values = df[obj.name].values.astype(float)
 
-            # 4. Gradient Line Logic
-            for j in range(actual_gens - 1):
-                # Use pre-calculated colors, fallback to last color if out of range
-                color_idx = j if j < len(self.colors) else -1
-                segment_color = self.colors[color_idx]
-
-                ax.plot(generations[j:j + 2], y_values[j:j + 2],
-                        color=segment_color, linewidth=2.5)
+            # Create continuous gradient line
+            self._create_gradient_line(ax, generations, y_values)
 
             # Styling
             ax.plot([], [], color=self.colors[-1], label="Population Mean")
@@ -135,7 +162,7 @@ class GraphPlotter:
         df = pd.DataFrame(mins_per_gen, columns=active_objectives)
 
         actual_gens = len(df)
-        generations = np.arange(actual_gens)
+        generations = np.arange(actual_gens, dtype=float)
 
         # 3. Setup Plot
         fig, axs = plt.subplots(len(active_objectives), 1, figsize=(12, 5 * len(active_objectives)), squeeze=False)
@@ -146,12 +173,10 @@ class GraphPlotter:
             ax = axs[i, 0]
 
             # Pull values safely (using the column name directly)
-            y_values = df[obj].values
+            y_values = df[obj].values.astype(float)
 
-            for j in range(actual_gens - 1):
-                color_idx = j if j < len(self.colors) else -1
-                ax.plot(generations[j:j + 2], y_values[j:j + 2],
-                        color=self.colors[color_idx], linewidth=2.5)
+            # Create continuous gradient line
+            self._create_gradient_line(ax, generations, y_values)
 
             ax.plot([], [], color=self.colors[-1], label="Best (Min) Fitness")
             ax.set_title(f"Objective: {obj.name}", fontsize=14)

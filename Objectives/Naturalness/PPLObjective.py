@@ -3,13 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 
-# Adjust import based on your exact folder structure
-# Assuming Objectives/base/BaseObjective.py
 from Objectives.base.BaseObjective import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class PPLObjective(BaseObjective):
+    objective_type = FitnessObjective.PPL
+
     def __init__(self, config, model_data: ModelData, device: str = None):
         super().__init__(config, model_data)
 

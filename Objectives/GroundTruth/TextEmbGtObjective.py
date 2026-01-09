@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class TextEmbGtObjective(BaseObjective):
@@ -17,6 +18,7 @@ class TextEmbGtObjective(BaseObjective):
     We convert to fitness: 0 = different from GT (good), 1 = same as GT (bad).
     (We want to move AWAY from ground-truth)
     """
+    objective_type = FitnessObjective.TEXT_EMB_GT
 
     def __init__(self, config, model_data: ModelData, device: str = None, embedding_data=None):
         super().__init__(config, model_data)

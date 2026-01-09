@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
-from Datastructures.enum import AttackMode
+from Datastructures.enum import AttackMode, FitnessObjective
 
 
 class TextEmbTargetObjective(BaseObjective):
@@ -19,6 +19,7 @@ class TextEmbTargetObjective(BaseObjective):
 
     NOTE: This objective requires TARGETED mode.
     """
+    objective_type = FitnessObjective.TEXT_EMB_TARGET
 
     def __init__(self, config, model_data: ModelData, device: str = None, embedding_data=None):
         super().__init__(config, model_data)

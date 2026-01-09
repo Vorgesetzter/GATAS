@@ -1,5 +1,6 @@
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class WhisperProbObjective(BaseObjective):
@@ -17,6 +18,7 @@ class WhisperProbObjective(BaseObjective):
     0 = ASR output matches target perfectly (good)
     1 = ASR output very different from target (bad)
     """
+    objective_type = FitnessObjective.WHISPER_PROB
 
     def __init__(self, config, model_data: ModelData, device: str = None):
         super().__init__(config, model_data)

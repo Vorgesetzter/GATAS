@@ -1,6 +1,7 @@
 import torch
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class L1Objective(BaseObjective):
@@ -13,6 +14,7 @@ class L1Objective(BaseObjective):
 
     Lower is better (we want to stay close to GT).
     """
+    objective_type = FitnessObjective.L1
 
     def __init__(self, config, model_data: ModelData, device: str = None):
         super().__init__(config, model_data)

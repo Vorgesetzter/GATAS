@@ -1,6 +1,7 @@
 import jiwer
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class WerTargetObjective(BaseObjective):
@@ -13,6 +14,7 @@ class WerTargetObjective(BaseObjective):
 
     Lower is better (we want ASR output to match target).
     """
+    objective_type = FitnessObjective.WER_TARGET
 
     def __init__(self, config, model_data: ModelData, device: str = None):
         super().__init__(config, model_data)

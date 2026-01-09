@@ -3,7 +3,7 @@ import torch.nn as nn
 from sentence_transformers import SentenceTransformer, util
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
-from Datastructures.enum import AttackMode
+from Datastructures.enum import AttackMode, FitnessObjective
 
 
 class SbertTargetObjective(BaseObjective):
@@ -18,6 +18,7 @@ class SbertTargetObjective(BaseObjective):
 
     NOTE: This objective requires TARGETED mode.
     """
+    objective_type = FitnessObjective.SBERT_TARGET
 
     def __init__(self, config, model_data: ModelData, device: str = None, embedding_data=None):
         super().__init__(config, model_data)

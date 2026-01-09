@@ -3,9 +3,12 @@ import torch.nn as nn
 from huggingface_hub import hf_hub_download
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class UtmosObjective(BaseObjective):
+    objective_type = FitnessObjective.UTMOS
+
     def __init__(self, config, model_data: ModelData, device: str = None):
         super().__init__(config, model_data)
 

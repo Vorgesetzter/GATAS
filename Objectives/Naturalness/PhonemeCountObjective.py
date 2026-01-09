@@ -1,10 +1,12 @@
 import torch
-# Adjust based on your folder structure
 from Objectives.base.BaseObjective import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class PhonemeCountObjective(BaseObjective):
+    objective_type = FitnessObjective.PHONEME_COUNT
+
     def __init__(self, config, model_data: ModelData, device: str = None):
         super().__init__(config, model_data)
         # This objective relies on the main TTS model which should already be loaded.

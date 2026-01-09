@@ -155,7 +155,7 @@ class AdversarialTrainer:
             leave=False
         )
 
-        gen = -1
+        gen = 0
         options = whisper.DecodingOptions()
 
         for gen in progress_bar:
@@ -171,7 +171,7 @@ class AdversarialTrainer:
 
             # Process batches
             for batch_idx in range(0, self.config.pop_size, self.config.batch_size):
-                batch_scores, batch_stop = self._process_batch(
+                batch_stop = self._process_batch(
                     batch_idx,
                     interpolation_vectors_full,
                     options,
@@ -196,8 +196,6 @@ class AdversarialTrainer:
             total_fitness_history.append(total_fitness)
             pareto_fitness_history.append(current_front)
 
-            progress_bar.update(1)
-            sys.stdout.flush()
 
             if stop_optimization:
                 print(f"\n[!] Early Stopping at Generation {gen + 1} (Thresholds met).")
@@ -212,12 +210,18 @@ class AdversarialTrainer:
         interpolation_vectors_full: torch.Tensor,
         options: whisper.DecodingOptions,
         gen_scores: dict
-    ) -> tuple[dict, bool]:
+    ) -> bool:
         """
         Process a single batch through TTS -> ASR -> Fitness evaluation.
 
+        Args:
+            batch_idx: Starting index of this batch
+            interpolation_vectors_full: Full population tensor
+            options: Whisper decoding options
+            gen_scores: Dict to collect scores into (modified in-place)
+
         Returns:
-            Tuple of (batch_scores, should_stop)
+            True if early stopping criteria met, False otherwise
         """
         stop_optimization = False
 
@@ -231,14 +235,15 @@ class AdversarialTrainer:
                 self.audio
             )
 
-        # 2. Prepare audio for ASR
-        audio_tensor = torch.from_numpy(audio_mixed_batch).squeeze(1).float().to(self.device)
-        audio_tensor = torchaudio_functional.resample(audio_tensor, 24000, 16000)
-        audio_tensor = whisper.pad_or_trim(audio_tensor)
+        # 2. Prepare audio tensors (single conversion from numpy)
+        audio_tensor_full = torch.from_numpy(audio_mixed_batch).to(self.device)
+        audio_tensor_asr = audio_tensor_full.squeeze(1).float()
+        audio_tensor_asr = torchaudio_functional.resample(audio_tensor_asr, 24000, 16000)
+        audio_tensor_asr = whisper.pad_or_trim(audio_tensor_asr)
 
         # 3. Create Mel spectrogram
         mel_batch = whisper.log_mel_spectrogram(
-            audio_tensor, n_mels=self._real_asr_model.dims.n_mels
+            audio_tensor_asr, n_mels=self._real_asr_model.dims.n_mels
         ).to(self.device)
 
         # 4. Compute WHISPER_PROB (if active)
@@ -253,7 +258,7 @@ class AdversarialTrainer:
 
         # 7. Create StepContext
         context = StepContext(
-            audio_mixed=torch.from_numpy(audio_mixed_batch).to(self.device),
+            audio_mixed=audio_tensor_full,
             asr_text=asr_texts,
             clean_text=clean_texts,
             interpolation_vector=interpolation_vectors,
@@ -282,7 +287,7 @@ class AdversarialTrainer:
             if self._check_early_stopping(current_ind_scores):
                 stop_optimization = True
 
-        return batch_scores, stop_optimization
+        return stop_optimization
 
     def _reset_state(self):
         """Reset state between optimization loops."""

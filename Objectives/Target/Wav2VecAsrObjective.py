@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from transformers import Wav2Vec2Model, Wav2Vec2Processor
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
-from Datastructures.enum import AttackMode
+from Datastructures.enum import AttackMode, FitnessObjective
 
 
 class Wav2VecAsrObjective(BaseObjective):
@@ -25,6 +25,7 @@ class Wav2VecAsrObjective(BaseObjective):
     NOTE: This objective does NOT support batching because it needs to
           synthesize audio for each ASR text individually via the TTS model.
     """
+    objective_type = FitnessObjective.WAV2VEC_ASR
 
     def __init__(self, config, model_data: ModelData, device: str = None, embedding_data=None):
         super().__init__(config, model_data)

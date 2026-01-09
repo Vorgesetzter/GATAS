@@ -1,8 +1,45 @@
 from abc import ABC, abstractmethod
+from typing import ClassVar, Type, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from Datastructures.enum import FitnessObjective
+
 from Datastructures.dataclass import ModelData, StepContext, AudioData
 
 
 class BaseObjective(ABC):
+    """
+    Abstract base class for all fitness objectives.
+
+    Subclasses must define `objective_type` as a class variable to auto-register:
+        class MyObjective(BaseObjective):
+            objective_type = FitnessObjective.MY_OBJECTIVE
+    """
+
+    # Class-level registry: maps FitnessObjective enum -> objective class
+    _registry: ClassVar[dict["FitnessObjective", Type["BaseObjective"]]] = {}
+
+    # Each subclass must define this (set to None in base to allow abstract usage)
+    objective_type: ClassVar["FitnessObjective"] = None
+
+    def __init_subclass__(cls, **kwargs):
+        """Auto-register subclasses that define objective_type."""
+        super().__init_subclass__(**kwargs)
+        if cls.objective_type is not None:
+            BaseObjective._registry[cls.objective_type] = cls
+
+    @classmethod
+    def get_class(cls, objective_enum: "FitnessObjective") -> Type["BaseObjective"]:
+        """Get the objective class for a given enum value."""
+        if objective_enum not in cls._registry:
+            raise ValueError(f"No objective registered for {objective_enum}")
+        return cls._registry[objective_enum]
+
+    @classmethod
+    def get_all_registered_enums(cls) -> list["FitnessObjective"]:
+        """Returns all registered FitnessObjective enums."""
+        return list(cls._registry.keys())
+
     def __init__(self, config, model_data: ModelData):
         self.config = config
         self.model_data = model_data

@@ -1,6 +1,7 @@
 import jiwer
 from Objectives.base import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class WerGtObjective(BaseObjective):
@@ -15,6 +16,7 @@ class WerGtObjective(BaseObjective):
     Output is normalized to (0, 1) where 0 = same as GT (bad), 1 = very different (good).
     But since we minimize fitness, we flip it: 0 = very different (good), 1 = same as GT (bad).
     """
+    objective_type = FitnessObjective.WER_GT
 
     def __init__(self, config, model_data: ModelData, device: str = None):
         super().__init__(config, model_data)

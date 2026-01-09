@@ -12,7 +12,7 @@ from typing import Optional
 from Datastructures.dataclass import ModelData, ConfigData, AudioData, EmbeddingData, StepContext
 from Datastructures.enum import FitnessObjective
 from Objectives.base import BaseObjective
-from Objectives.registry import get_objective
+from Objectives.registry import get_objective, ensure_all_registered
 
 
 class ObjectiveManager:
@@ -34,6 +34,9 @@ class ObjectiveManager:
         device: str,
         embedding_data: Optional[EmbeddingData] = None
     ):
+        # Ensure all objective classes are registered before lookup
+        ensure_all_registered()
+
         self.config = config
         self.model_data = model_data
         self.device = device

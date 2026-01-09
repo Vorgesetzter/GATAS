@@ -4,9 +4,12 @@ import torchaudio.functional as F
 from pesq import pesq
 from Objectives.base.BaseObjective import BaseObjective
 from Datastructures.dataclass import ModelData, StepContext, AudioData
+from Datastructures.enum import FitnessObjective
 
 
 class PesqObjective(BaseObjective):
+    objective_type = FitnessObjective.PESQ
+
     def __init__(self, config, model_data: ModelData, device: str = None):
         super().__init__(config, model_data)
 
