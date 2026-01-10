@@ -105,10 +105,6 @@ class AdversarialTrainer:
             )
             results.append(result)
 
-            if stopped_early:
-                print(f"[Info] Early stopping triggered. Ending optimization.")
-                break
-
             # Reset optimizer for next loop (if not last)
             if loop_idx < self.config.loop_count - 1:
                 self._reset_state()
