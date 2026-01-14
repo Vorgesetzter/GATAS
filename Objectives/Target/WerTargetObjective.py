@@ -13,6 +13,9 @@ class WerTargetObjective(BaseObjective):
     0 = perfect match, 1 = 100% of words wrong
 
     Lower is better (we want ASR output to match target).
+    Output is normalized to (0, 1) where:
+         0 = 100% similarity / matches target (good for attack)
+         1 = 0% similarity / different from target (bad for attack)
     """
     objective_type = FitnessObjective.WER_TARGET
 
@@ -40,19 +43,31 @@ class WerTargetObjective(BaseObjective):
 
     @property
     def supports_batching(self) -> bool:
-        return False  # JIWER doesn't support batching natively
+        return True
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> float:
-        asr_text = context.clean_text
+    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> list[float]:
+        """
+        Batched WER calculation.
+        Returns list of scores in range (0, 1) where 0 = matches target (good), 1 = different (bad).
+        """
+        asr_texts = context.clean_text  # List of strings
 
-        wer = jiwer.wer(
-            self.text_target,
-            asr_text,
-            reference_transform=self.wer_transformations,
-            hypothesis_transform=self.wer_transformations,
-        )
+        scores = []
+        for asr_text in asr_texts:
+            # Skip empty/invalid texts
+            if not asr_text or len(asr_text) < 2:
+                scores.append(1.0)  # Penalize invalid
+                continue
 
-        val = float(wer)
-        val = min(val, 1.0)  # Clamp to (0, 1)
+            raw_wer = jiwer.wer(
+                self.text_target,
+                asr_text,
+                reference_transform=self.wer_transformations,
+                hypothesis_transform=self.wer_transformations,
+            )
 
-        return val
+            # Normalize to (0, 1): raw_wer 0 -> 0 (100% similar), raw_wer 1+ -> 1 (0% similar)
+            val = min(1.0, float(raw_wer))
+            scores.append(val)
+
+        return scores

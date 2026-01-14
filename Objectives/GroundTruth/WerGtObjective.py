@@ -13,8 +13,9 @@ class WerGtObjective(BaseObjective):
     0 = perfect match, 1 = 100% of words wrong
 
     We INVERT this: higher WER (more different from GT) is better.
-    Output is normalized to (0, 1) where 0 = same as GT (bad), 1 = very different (good).
-    But since we minimize fitness, we flip it: 0 = very different (good), 1 = same as GT (bad).
+    Output is normalized to (0, 1) where:
+         0 = 0% similarity / very different from GT (good for attack)
+         1 = 100% similarity / same as GT (bad for attack)
     """
     objective_type = FitnessObjective.WER_GT
 
@@ -45,22 +46,31 @@ class WerGtObjective(BaseObjective):
 
     @property
     def supports_batching(self) -> bool:
-        return False  # JIWER doesn't support batching natively
+        return True
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> float:
-        asr_text = context.clean_text
+    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> list[float]:
+        """
+        Batched WER calculation.
+        Returns list of scores in range (0, 1) where 0 = different (good), 1 = same (bad).
+        """
+        asr_texts = context.clean_text  # List of strings
 
-        wer = jiwer.wer(
-            self.text_gt,
-            asr_text,
-            reference_transform=self.wer_transformations,
-            hypothesis_transform=self.wer_transformations,
-        )
+        scores = []
+        for asr_text in asr_texts:
+            # Skip empty/invalid texts
+            if not asr_text or len(asr_text) < 2:
+                scores.append(1.0)  # Penalize invalid
+                continue
 
-        val = float(wer)
-        val = min(val, 2.0)
-        # Invert: high WER = good (different from GT)
-        val = -val + 2.0
-        val /= 2.0
+            raw_wer = jiwer.wer(
+                self.text_gt,
+                asr_text,
+                reference_transform=self.wer_transformations,
+                hypothesis_transform=self.wer_transformations,
+            )
 
-        return val
+            # Normalize to (0, 1): raw_wer 0 -> 1 (100% similar), raw_wer 1+ -> 0 (0% similar)
+            val = max(0.0, 1.0 - float(raw_wer))
+            scores.append(val)
+
+        return scores
