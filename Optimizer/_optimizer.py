@@ -8,7 +8,8 @@ import numpy as np
 from numpy.typing import NDArray
 from torch import Tensor
 
-from Optimizer._optimizer_candidate import OptimizerCandidate
+from .auxiliary_components import OptimizerCandidate
+
 
 class Optimizer(ABC):
     """An abstract optimizer class."""
@@ -56,6 +57,7 @@ class Optimizer(ABC):
 
         :param fitness: The fitness to assign.
         :param data: Additional data for the candidates.
+        :raises ValueError: If metrics array is not a 2D vector for some reason.
         """
         logging.info(f"Assigning fitness to {self.__class__.__name__}")
         # Format fitness into tuple if it is list or singular item.
@@ -72,7 +74,7 @@ class Optimizer(ABC):
             fitness
         ).T  # Metrics are rows, instances are columns -> we transpose.
         old_metrics = np.ascontiguousarray([cand.fitness for cand in self._best_candidates])
-        metrics = np.vstack((new_metrics, old_metrics))
+        metrics = np.vstack((new_metrics, old_metrics))  # (n_new + n_old, n_obj)
 
         new_data: list[Any] = [None] * new_metrics.shape[0] if not data else list(zip(*data))
         data = tuple(new_data + [cand.data for cand in self._best_candidates])
@@ -81,34 +83,26 @@ class Optimizer(ABC):
             (self._x_current, np.array([cand.solution for cand in self._best_candidates]))
         )
 
-        n = metrics.shape[0]
-        indices = np.arange(n)
+        M = np.asarray(metrics)
+        if M.ndim != 2:
+            raise ValueError("metrics must be 2D: (n_points, n_objectives)")
 
-        i = 0
-        while i < indices.shape[0]:
-            on_pareto: NDArray = np.ones(indices.shape[0], dtype=bool)
+        le = M[:, None, :] <= M[None, :, :]  # (n, n, k)
+        lt = M[:, None, :] < M[None, :, :]  # (n, n, k)
+        dominates = le.all(axis=2) & lt.any(axis=2)  # (n, n)
+        dominated = dominates.any(axis=0)  # (n,)
 
-            cur = metrics[indices[i]]
-            rest = metrics[indices[i + 1 :]]
+        kept_indices = np.flatnonzero(dominated)
 
-            dominated_by_cur = (rest >= cur).all(axis=1) & (rest > cur).any(
-                axis=1
-            )  # minimization only
-
-            on_pareto[i + 1 :] = ~dominated_by_cur
-            indices = indices[on_pareto]
-
-            i += 1
-
-        candidates = []
-        for index in indices:
-            candidates.append(
-                OptimizerCandidate(
-                    solution=solutions[index],
-                    fitness=metrics[index],
-                    data=data[index],
-                )
+        candidates = [
+            OptimizerCandidate(
+                solution=solutions[i],
+                fitness=metrics[i],
+                data=data[i],
             )
+            for i in kept_indices
+        ]
+
         self._previous_best = self._best_candidates
         self._best_candidates = candidates
 
