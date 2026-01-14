@@ -19,7 +19,7 @@ import numpy as np
 
 # Local imports
 from Models.styletts2 import StyleTTS2
-from helper import addNumbersPattern, initialize_parser
+from helper import addNumbersPattern
 
 # Import dataclasses and enums
 from Datastructures.dataclass import ModelData, ConfigData, AudioData
@@ -36,21 +36,16 @@ class EnvironmentLoader:
         # Ensure all objectives are registered, then get their order
         self.objective_order: list[FitnessObjective] = BaseObjective.get_all_registered_enums()
 
-    def initialize(self, args_override: list[str] | None = None):
+    def initialize(self, args):
         """
         Entry point to setup the full experimental environment.
         Parses arguments and initializes all components.
-
-        Args:
-            args_override: Optional list of CLI args to parse instead of sys.argv.
-                           Pass [] to use defaults (useful for Jupyter notebooks).
-                           Pass None to parse sys.argv (CLI behavior).
 
         Returns: (config, model_data, audio_data, embedding_data, objective_manager)
         """
 
         # 1. Parse arguments and create ConfigData
-        config_data = self._load_configuration(args_override)
+        config_data = self._load_configuration(args)
         config_data.print_summary()
 
         # 2. Models
@@ -76,15 +71,12 @@ class EnvironmentLoader:
     # Helper Methods
     # =========================================================================
 
-    def _load_configuration(self, args_override: list[str] | None = None) -> ConfigData:
+    def _load_configuration(self, args) -> ConfigData:
         """Parse command-line arguments and create validated ConfigData.
 
         Args:
             args_override: Optional list of CLI args. Pass [] for defaults, None for sys.argv.
         """
-
-        parser = initialize_parser()
-        args = parser.parse_args(args_override)
 
         random_matrix = torch.from_numpy(
             np.random.rand(args.size_per_phoneme, 512)
