@@ -8,7 +8,6 @@ class AttackMode(Enum):
 class FitnessObjective(Enum):
 
     # ==== Increase Naturalness ====
-    PHONEME_COUNT = auto()
     UTMOS = auto()
     PPL = auto()
     PESQ = auto()

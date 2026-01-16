@@ -9,21 +9,18 @@ from helper import get_local_pareto_front, calculate_2d_hypervolume
 
 
 class GraphPlotter:
-    def __init__(self, folder_path, active_objectives, total_generations, fitness_history):
+    def __init__(self, objectives, generations, folder_path, fitness_history):
+        self.objectives = objectives
         self.folder_path = folder_path
-        self.objectives = active_objectives
-        self.total_gens = max(1, total_generations)
-
-        # fitness_history is a List of np.ndarrays: [Gen1_Matrix, Gen2_Matrix, ...]
-        # Each Matrix is shape (pop_size, num_objectives)
-        self.fitness_history = fitness_history
+        if not fitness_history or len(fitness_history) == 0:
+            print("[Log] No fitness data available to plot.")
+            return
+        else:
+            self.fitness_history = fitness_history
 
         # 1. Define the Global Gradient
         self.cmap = plt.get_cmap('viridis')
-
-        # 2. Pre-calculate colors for EVERY generation
-        # This ensures Gen X is always the same color in every function
-        self.colors = self.cmap(np.linspace(0, 1, self.total_gens))
+        self.colors = self.cmap(np.linspace(0, 1, generations))
 
     def _create_gradient_line(self, ax, x_data, y_data, num_interp_points=500):
         """
@@ -63,25 +60,21 @@ class GraphPlotter:
         """
         Orchestrates all plotting using self.fitness_history.
         """
-        if not self.fitness_history or len(self.fitness_history) == 0:
-            print("[Log] No fitness data available to plot.")
-            return
 
-        # 1. Pareto & Hypervolume (Multi-objective only)
-        if len(self.objectives) == 2:
-            self._generate_hypervolume_graph()
-            if len(self.fitness_history) >= 2:
-                self._generate_pareto_population_graph()
+        self.generate_hypervolume_graph()
+        self.generate_pareto_population_graph()
 
         # 2. Mean Fitness Evolution
-        self._generate_mean_population_graph()
+        self.generate_mean_population_graph()
 
         # 3. Minimal (Best) Fitness Evolution
-        self._generate_minimal_population_graph()
+        self.generate_minimal_population_graph()
 
         plt.close('all')
 
-    def _generate_pareto_population_graph(self):
+    def generate_pareto_population_graph(self):
+        if len(self.objectives) != 2 or len(self.fitness_history) < 2: return
+
         # Use self.fitness_history directly
         total_gens = len(self.fitness_history)
         active_objectives = self.objectives
@@ -128,7 +121,7 @@ class GraphPlotter:
         plt.savefig(save_path, dpi=300)
         print("[Log] Pareto evolution graph saved as pareto_evolution.png")
 
-    def _generate_mean_population_graph(self):
+    def generate_mean_population_graph(self):
         active_objectives = self.objectives
 
         # 1. Calculate Means manually from history
@@ -167,7 +160,7 @@ class GraphPlotter:
         plt.savefig(save_path, dpi=300)
         print("[Log] Mean fitness graph saved as mean_fitness_stack.png")
 
-    def _generate_minimal_population_graph(self):
+    def generate_minimal_population_graph(self):
         active_objectives = self.objectives
 
         # 1. Calculate Mins manually from history
@@ -205,11 +198,11 @@ class GraphPlotter:
         plt.savefig(save_path, dpi=300)
         print("[Log] Minimal fitness graph saved as minimal_fitness_stack.png")
 
-    def _generate_hypervolume_graph(self):
+    def generate_hypervolume_graph(self):
         """
         Plots the Hypervolume convergence over generations.
         """
-        if not self.fitness_history: return
+        if len(self.objectives) != 2: return
 
         # Define a reference point (Worst case)
         ref_point = [1.1, 1.1]

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import Wav2Vec2Model, Wav2Vec2Processor
 from Objectives.base import BaseObjective
-from Datastructures.dataclass import ModelData, StepContext, AudioData, EmbeddingData
+from Datastructures.dataclass import ModelData, StepContext, ModelEmbeddingData
 from Datastructures.enum import FitnessObjective
 
 
@@ -20,15 +20,8 @@ class Wav2VecSimilarObjective(BaseObjective):
     """
     objective_type = FitnessObjective.WAV2VEC_SIMILAR
 
-    def __init__(
-        self,
-        config,
-        model_data: ModelData,
-        device: str = None,
-        embedding_data: EmbeddingData = None,
-        audio_data: AudioData = None
-    ):
-        super().__init__(config, model_data, device, embedding_data, audio_data)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # Load Wav2Vec2 model if not already loaded
         if self.model_data.wav2vec_model is None:
@@ -52,9 +45,9 @@ class Wav2VecSimilarObjective(BaseObjective):
         self.wav2vec_processor = self.model_data.wav2vec_processor
 
         # Compute GT embedding if not already computed
-        if self.embedding_data is not None and self.embedding_data.wav2vec_embedding_gt is None and audio_data is not None:
+        if self.embedding_data is not None and self.embedding_data.wav2vec_embedding_gt is None and self.audio_gt is not None:
             print("[INFO] Computing Wav2Vec GT embedding...")
-            self.embedding_data.wav2vec_embedding_gt = self._compute_embedding(audio_data.audio_gt)
+            self.embedding_data.wav2vec_embedding_gt = self._compute_embedding(self.audio_gt)
 
     def _compute_embedding(self, audio) -> torch.Tensor:
         """Compute Wav2Vec embedding for audio."""
@@ -69,7 +62,7 @@ class Wav2VecSimilarObjective(BaseObjective):
     def supports_batching(self) -> bool:
         return True
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> list[float]:
+    def _calculate_logic(self, context: StepContext) -> list[float]:
         """Process entire batch at once."""
         audio_mixed = context.audio_mixed  # [Batch, Time] or [Time]
 

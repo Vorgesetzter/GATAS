@@ -4,22 +4,15 @@ import torch.nn.functional as F
 from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 
 from Objectives.base.BaseObjective import BaseObjective
-from Datastructures.dataclass import ModelData, StepContext, AudioData, EmbeddingData
+from Datastructures.dataclass import ModelData, StepContext, ModelEmbeddingData
 from Datastructures.enum import FitnessObjective
 
 
 class PPLObjective(BaseObjective):
     objective_type = FitnessObjective.PPL
 
-    def __init__(
-        self,
-        config,
-        model_data: ModelData,
-        device: str = None,
-        embedding_data: EmbeddingData = None,
-        audio_data: AudioData = None
-    ):
-        super().__init__(config, model_data, device, embedding_data, audio_data)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # Lazy Loading (Check if Model AND Tokenizer exist)
         if self.model_data.perplexity_model is None or self.model_data.perplexity_tokenizer is None:
@@ -59,7 +52,7 @@ class PPLObjective(BaseObjective):
     def supports_batching(self):
         return True
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData):
+    def _calculate_logic(self, context: StepContext):
         # 1. Prepare Inputs
         texts = context.asr_text
         if isinstance(texts, str): texts = [texts]

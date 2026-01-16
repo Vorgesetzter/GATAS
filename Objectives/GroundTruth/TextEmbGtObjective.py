@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
 from Objectives.base import BaseObjective
-from Datastructures.dataclass import ModelData, StepContext, AudioData, EmbeddingData
+from Datastructures.dataclass import ModelData, StepContext, ModelEmbeddingData
 from Datastructures.enum import FitnessObjective
 
 
@@ -20,15 +20,8 @@ class TextEmbGtObjective(BaseObjective):
     """
     objective_type = FitnessObjective.TEXT_EMB_GT
 
-    def __init__(
-        self,
-        config,
-        model_data: ModelData,
-        device: str = None,
-        embedding_data: EmbeddingData = None,
-        audio_data: AudioData = None
-    ):
-        super().__init__(config, model_data, device, embedding_data, audio_data)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # Load embedding model if not already loaded
         if self.model_data.embedding_model is None:
@@ -48,7 +41,7 @@ class TextEmbGtObjective(BaseObjective):
         # Compute GT text embedding if not already computed
         if self.embedding_data is not None and self.embedding_data.text_embedding_gt is None:
             self.embedding_data.text_embedding_gt = self.embedding_model.encode(
-                config.text_gt,
+                self.text_gt,
                 convert_to_tensor=True,
                 normalize_embeddings=True
             )
@@ -57,7 +50,7 @@ class TextEmbGtObjective(BaseObjective):
     def supports_batching(self) -> bool:
         return True
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> list[float]:
+    def _calculate_logic(self, context: StepContext) -> list[float]:
         """Process entire batch at once."""
         asr_texts = context.clean_text
         if isinstance(asr_texts, str):

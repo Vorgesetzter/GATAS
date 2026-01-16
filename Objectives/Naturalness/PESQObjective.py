@@ -3,22 +3,15 @@ import torch
 import torchaudio.functional as F
 from pesq import pesq
 from Objectives.base.BaseObjective import BaseObjective
-from Datastructures.dataclass import ModelData, StepContext, AudioData, EmbeddingData
+from Datastructures.dataclass import ModelData, StepContext, ModelEmbeddingData
 from Datastructures.enum import FitnessObjective
 
 
 class PesqObjective(BaseObjective):
     objective_type = FitnessObjective.PESQ
 
-    def __init__(
-        self,
-        config,
-        model_data: ModelData,
-        device: str = None,
-        embedding_data: EmbeddingData = None,
-        audio_data: AudioData = None
-    ):
-        super().__init__(config, model_data, device, embedding_data, audio_data)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # Cache for resampled GT audio (computed on first use)
         self.cached_gt_16k = None
@@ -32,7 +25,7 @@ class PesqObjective(BaseObjective):
         """
         return False
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> float:
+    def _calculate_logic(self, context: StepContext) -> float:
         """
         Calculates PESQ for a SINGLE candidate (Not Batched).
         """
@@ -40,7 +33,7 @@ class PesqObjective(BaseObjective):
         # --- 1. Lazy Cache Ground Truth (Run Only Once) ---
         if self.cached_gt_16k is None:
             # Move GT to CPU and Resample 24k -> 16k
-            gt_tensor = torch.as_tensor(audio_data.audio_gt, device='cpu', dtype=torch.float32)
+            gt_tensor = torch.as_tensor(self.audio_gt, device='cpu', dtype=torch.float32)
 
             # Ensure shape [1, Time] for torchaudio
             if gt_tensor.dim() == 1:

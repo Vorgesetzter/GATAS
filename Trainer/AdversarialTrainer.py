@@ -11,51 +11,42 @@ Logging and visualization should be handled separately via RunLogger.
 """
 
 import time
-import re
+import string
 import torch
 import numpy as np
 import whisper
 import torchaudio.functional as torchaudio_functional
 from tqdm.auto import tqdm
-from dataclasses import dataclass
 
 # Local imports
-from Datastructures.dataclass import ConfigData, ModelData, AudioData, StepContext, FitnessData
+from Datastructures.dataclass import AudioData, ConfigData, StepContext
+from Datastructures.enum import FitnessObjective
 from Objectives.ObjectiveManager import ObjectiveManager
 
-# Import Pymoo components
-from Optimizer.pymoo_optimizer import PymooOptimizer
-
-
-@dataclass
-class OptimizationResult:
-    """Result from a single optimization cycle."""
-    fitness_data: FitnessData
-    generation_count: int
-    elapsed_time: float
-    stopped_early: bool
-
+from Trainer.VectorManipulator import VectorManipulator
 
 class AdversarialTrainer:
 
     def __init__(
         self,
-        config: ConfigData,
-        models: ModelData,
-        audio: AudioData,
+        tts_model,
+        asr_model,
+        active_objectives: list[FitnessObjective],
+        thresholds: dict[FitnessObjective, float],
         objective_manager: ObjectiveManager,
+        vector_manipulator: VectorManipulator,
         device: str
     ):
         # Store state
-        self.config = config
-        self.models = models
-        self.audio = audio
+        self.tts_model = tts_model
+        self.asr_model = asr_model.module if isinstance(asr_model, torch.nn.DataParallel) else asr_model
+        self.active_objectives = active_objectives
+        self.thresholds = thresholds
         self.objective_manager = objective_manager
+        self.vector_manipulator=vector_manipulator
         self.device = device
 
-        self._real_asr_model = self.models.asr_model.module if isinstance(self.models.asr_model, torch.nn.DataParallel) else self.models.asr_model
-
-    def run_full_iteration(self, optimizer: PymooOptimizer) -> tuple[list[np.ndarray], int, float]:
+    def run_full_iteration(self, optimizer, num_generations, pop_size, batch_size) -> tuple[list[np.ndarray], int, float]:
         """
             Run a single optimization cycle through all generations.
 
@@ -77,11 +68,11 @@ class AdversarialTrainer:
 
         try:
             # 1. Create the progress bar object
-            with tqdm(range(self.config.num_generations), desc="Generations", leave=False) as pbar:
+            with tqdm(range(num_generations), desc="Generations", leave=False) as pbar:
 
                 for gen in pbar:
                     # --- Existing Logic ---
-                    fitness_score_per_objective, stop_optimization, elapsed_time = self.run_one_generation(optimizer)
+                    fitness_score_per_objective, stop_optimization, elapsed_time = self.run_one_generation(optimizer, pop_size, batch_size)
                     fitness_arrays = [np.array(scores) for scores in fitness_score_per_objective]
 
                     optimizer.assign_fitness(fitness_arrays)
@@ -99,7 +90,7 @@ class AdversarialTrainer:
 
                     # Format the string (e.g., "WER: 0.15 (Avg: 0.40) | PESQ: ...")
                     stats_parts = []
-                    for idx, obj in enumerate(self.config.active_objectives):
+                    for idx, obj in enumerate(self.active_objectives):
                         stats_parts.append(
                             f"{obj.name}: {current_mins[idx]:.4f} (Avg: {current_means[idx]:.4f})"
                         )
@@ -121,21 +112,22 @@ class AdversarialTrainer:
 
         return fitness_history, gen+1, elapsed_time_total
 
-    def run_one_generation(self, optimizer: PymooOptimizer) -> tuple[list[list[float]], bool, float]:
+    def run_one_generation(self, optimizer, pop_size, batch_size) -> tuple[list[list[float]], bool, float]:
 
         stop_optimization = False
         total_elapsed_time = 0
 
         # Create list to store scores for this generation
-        fitness_per_objective: list[list[float]] = [[] for _ in self.config.active_objectives]
+        fitness_per_objective: list[list[float]] = [[] for _ in self.active_objectives]
 
         # Get current population from optimizer
         interpolation_vectors_full = torch.from_numpy(optimizer.get_x_current()).to(self.device).float()
 
         # Process batches
-        for batch_idx in range(0, self.config.pop_size, self.config.batch_size):
+        for batch_idx in range(0, pop_size, batch_size):
             batch_stop, batch_fitness_per_objective, elapsed_time = self._process_batch(
                 batch_idx,
+                batch_size,
                 interpolation_vectors_full,
             )
             total_elapsed_time += elapsed_time
@@ -152,7 +144,7 @@ class AdversarialTrainer:
     # Helper Methods
     # =========================================================================
 
-    def _process_batch(self, batch_idx: int, interpolation_vectors_full: torch.Tensor) -> tuple[bool, list[list[float]], float]:
+    def _process_batch(self, batch_idx: int, batch_size: int, interpolation_vectors_full: torch.Tensor) -> tuple[bool, list[list[float]], float]:
         """
         Returns:
             stop_optimization (bool): True if early stopping met.
@@ -168,37 +160,29 @@ class AdversarialTrainer:
         start_time = time.time()
 
         # 1. TTS Inference
-        audio_mixed_batch, current_batch_size, interpolation_vectors = \
-            self.models.tts_model.inference_on_interpolation_vectors(
-                interpolation_vectors_full,
-                batch_idx,
-                self.config.batch_size,
-                self.config,
-                self.audio
-            )
+        interpolation_vectors_batch = interpolation_vectors_full[batch_idx: batch_idx + batch_size]
+        current_batch_size, interpolation_vectors, audio_embedding_data_mixed = self.vector_manipulator.interpolate(interpolation_vectors_batch)
+        audio_mixed_batch = self.tts_model.inference_on_embedding(audio_embedding_data_mixed)
 
         # 2. Prepare audio tensors (single conversion from numpy)
-        audio_tensor_full = torch.from_numpy(audio_mixed_batch).to(self.device)
-        audio_tensor_asr = audio_tensor_full.squeeze(1).float()
-        audio_tensor_asr = torchaudio_functional.resample(audio_tensor_asr, 24000, 16000)
+        audio_tensor_asr = torchaudio_functional.resample(audio_mixed_batch, 24000, 16000)
         audio_tensor_asr = whisper.pad_or_trim(audio_tensor_asr)
 
         # 3. Create Mel spectrogram
-        mel_batch = whisper.log_mel_spectrogram(
-            audio_tensor_asr, n_mels=self._real_asr_model.dims.n_mels
-        ).to(self.device)
+        mel_batch = whisper.log_mel_spectrogram(audio_tensor_asr, n_mels=self.asr_model.dims.n_mels).to(self.device)
 
         # 4. Run ASR decoding (without_timestamps reduces hallucination on padded silence)
         decode_options = whisper.DecodingOptions(without_timestamps=True)
-        results = whisper.decode(self._real_asr_model, mel_batch, decode_options)
+        results = whisper.decode(self.asr_model, mel_batch, decode_options)
 
         # 5. Process ASR results
         asr_texts = [r.text for r in results]
-        clean_texts = [re.sub(r'[^a-zA-Z\s]', '', t).strip() for t in asr_texts]
+        # clean_texts = [re.sub(r'[^a-zA-Z\s]', '', t).strip() for t in asr_texts]
+        clean_texts = [t.translate(str.maketrans('', '', string.punctuation)).strip() for t in asr_texts]
 
         # 6. Create StepContext
         context = StepContext(
-            audio_mixed=audio_tensor_full,
+            audio_mixed=audio_mixed_batch,
             asr_text=asr_texts,
             clean_text=clean_texts,
             interpolation_vector=interpolation_vectors,
@@ -207,7 +191,7 @@ class AdversarialTrainer:
 
         # 7. Evaluate objectives
         # batch_scores is dict: {FitnessObjective.WER: [0.1, 0.2], ...}
-        batch_scores_dict = self.objective_manager.evaluate_batch(context, self.audio)
+        batch_scores_dict = self.objective_manager.evaluate_batch(context)
 
         end_time = time.time()
 
@@ -219,9 +203,9 @@ class AdversarialTrainer:
         garbage_mask = np.array([len(t) < 2 for t in clean_texts], dtype=bool)
 
         # Build score matrix: [batch_size, num_objectives]
-        score_matrix = np.zeros((current_batch_size, len(self.config.active_objectives)), dtype=np.float32)
+        score_matrix = np.zeros((current_batch_size, len(self.active_objectives)), dtype=np.float32)
 
-        for obj_idx, obj in enumerate(self.config.active_objectives):
+        for obj_idx, obj in enumerate(self.active_objectives):
             scores = np.array(batch_scores_dict[obj], dtype=np.float32)
             scores[garbage_mask] = 1.0  # Penalize garbage samples
 
@@ -237,7 +221,6 @@ class AdversarialTrainer:
 
         return stop_optimization, batch_scores_list, elapsed_time
 
-
     def _check_early_stopping_batch(self, score_matrix: np.ndarray) -> bool:
         """
         Check if any individual in the batch meets all threshold criteria.
@@ -248,17 +231,17 @@ class AdversarialTrainer:
         Returns:
             True if any individual meets all thresholds, False otherwise
         """
-        if not self.config.thresholds:
+        if not self.thresholds:
             return False
 
         # Build threshold array aligned with active_objectives order
         threshold_mask = []  # Which objectives have thresholds
         threshold_values = []
 
-        for obj_idx, obj in enumerate(self.config.active_objectives):
-            if obj in self.config.thresholds:
+        for obj_idx, obj in enumerate(self.active_objectives):
+            if obj in self.thresholds:
                 threshold_mask.append(obj_idx)
-                threshold_values.append(self.config.thresholds[obj])
+                threshold_values.append(self.thresholds[obj])
 
         if not threshold_mask:
             return False

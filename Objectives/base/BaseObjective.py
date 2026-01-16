@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import ClassVar, Type, TYPE_CHECKING
+from typing import ClassVar, Type, Optional, TYPE_CHECKING
+import torch
 
 if TYPE_CHECKING:
-    from Datastructures.enum import FitnessObjective
+    from Datastructures.enum import FitnessObjective, AttackMode
 
-from Datastructures.dataclass import ModelData, StepContext, AudioData, EmbeddingData
+from Datastructures.dataclass import ModelData, StepContext, ModelEmbeddingData
 
 
 class BaseObjective(ABC):
@@ -42,17 +43,25 @@ class BaseObjective(ABC):
 
     def __init__(
         self,
-        config,
         model_data: ModelData,
         device: str = None,
-        embedding_data: EmbeddingData = None,
-        audio_data: AudioData = None
+        embedding_data: ModelEmbeddingData = None,
+        text_gt: Optional[str] = None,
+        text_target: Optional[str] = None,
+        mode: Optional["AttackMode"] = None,
+        audio_gt: Optional[torch.Tensor] = None,
+        style_vector_acoustic: Optional[torch.Tensor] = None,
+        style_vector_prosodic: Optional[torch.Tensor] = None,
     ):
-        self.config = config
         self.model_data = model_data
-        self.device = device or ('cuda' if __import__('torch').cuda.is_available() else 'cpu')
+        self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.embedding_data = embedding_data
-        self.audio_data = audio_data
+        self.text_gt = text_gt
+        self.text_target = text_target
+        self.mode = mode
+        self.audio_gt = audio_gt
+        self.style_vector_acoustic = style_vector_acoustic
+        self.style_vector_prosodic = style_vector_prosodic
 
     @property
     def name(self):
@@ -67,7 +76,7 @@ class BaseObjective(ABC):
         """
         return False
 
-    def calculate_score(self, context: StepContext, audio_data: AudioData) -> list[float]:
+    def calculate_score(self, context: StepContext) -> list[float]:
         """
         Public API. ALWAYS returns a list of floats, even if batch_size=1.
         """
@@ -75,7 +84,7 @@ class BaseObjective(ABC):
         if self.supports_batching:
             try:
                 # We trust the child class to handle the whole batch at once
-                return self._calculate_logic(context, audio_data)
+                return self._calculate_logic(context)
             except Exception as e:
                 print(f"Error in {self.name} (Batch Mode): {e}")
                 # Return a list of 1.0s equal to the batch size as fail-safe
@@ -96,7 +105,7 @@ class BaseObjective(ABC):
                         continue
 
                     # Call logic on ONE item
-                    val = self._calculate_logic(single_ctx, audio_data)
+                    val = self._calculate_logic(single_ctx)
                     scores.append(float(val))
 
                 except Exception as e:
@@ -106,7 +115,7 @@ class BaseObjective(ABC):
             return scores
 
     @abstractmethod
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData):
+    def _calculate_logic(self, context: StepContext):
         """
         The specific math for this objective.
         """

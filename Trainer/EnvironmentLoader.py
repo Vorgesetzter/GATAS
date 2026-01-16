@@ -12,17 +12,15 @@ This module handles:
 from __future__ import annotations
 
 import torch
-import torch.nn as nn
 import whisper
-import warnings
 import numpy as np
 
 # Local imports
 from Models.styletts2 import StyleTTS2
-from helper import addNumbersPattern
+from Trainer.VectorManipulator import add_numbers_pattern, generate_similar_noise
 
 # Import dataclasses and enums
-from Datastructures.dataclass import ModelData, ConfigData, AudioData
+from Datastructures.dataclass import ModelData, ConfigData, AudioEmbeddingData
 from Datastructures.enum import FitnessObjective, AttackMode
 
 # Import ObjectiveManager and registry
@@ -45,37 +43,41 @@ class EnvironmentLoader:
         """
 
         # 1. Parse arguments and create ConfigData
-        config_data = self._load_configuration(args)
+        config_data = self.load_configuration(args)
         config_data.print_summary()
 
         # 2. Models
-        model_data = self._load_required_models(config_data.multi_gpu)
+        tts_model, asr_model = self.load_required_models()
 
         # 3. Audio Data
-        audio_data = self._generate_audio_data(config_data, model_data.tts_model)
+        audio_gt, audio_target, audio_embedding_gt, audio_embedding_target = self.generate_audio_data(config_data.mode, config_data.text_gt, config_data.text_target, tts_model)
 
         # 4. Initialize Objective Manager
         objective_manager = ObjectiveManager(
-            config=config_data,
-            model_data=model_data,
+            model_data=ModelData(tts_model=tts_model, asr_model=asr_model),
             device=self.device,
-            audio_data=audio_data
+            text_gt=config_data.text_gt,
+            text_target=config_data.text_target,
+            mode=config_data.mode,
+            audio_gt=audio_gt,
+            style_vector_acoustic=audio_embedding_gt.style_vector_acoustic,
+            style_vector_prosodic=audio_embedding_gt.style_vector_prosodic
         )
 
         # 5. Load model for each objective and compute embeddings
-        objective_manager.initialize_objectives()
+        objective_manager.initialize_objectives(config_data.active_objectives)
 
-        return config_data, model_data, audio_data, objective_manager
+        return config_data, tts_model, asr_model, audio_gt, audio_target, audio_embedding_gt, audio_embedding_target, objective_manager
 
     # =========================================================================
     # Helper Methods
     # =========================================================================
 
-    def _load_configuration(self, args) -> ConfigData:
+    def load_configuration(self, args) -> ConfigData:
         """Parse command-line arguments and create validated ConfigData.
 
         Args:
-            args_override: Optional list of CLI args. Pass [] for defaults, None for sys.argv.
+            args: Optional list of CLI args. Pass [] for defaults, None for sys.argv.
         """
 
         random_matrix = torch.from_numpy(
@@ -116,12 +118,6 @@ class EnvironmentLoader:
         # Set batch size (Set to pop_size if pop_size < batch_size or batch_size <= 0)
         batch_size = min(args.batch_size, args.pop_size) if args.batch_size > 0 else args.pop_size
 
-        # Multi-GPU validation
-        multi_gpu = args.multi_gpu
-        if multi_gpu and torch.cuda.device_count() <= 1:
-            warnings.warn("Multi-GPU enabled but only 1 GPU available. Disabling.")
-            multi_gpu = False
-
         return ConfigData(
             text_gt=args.ground_truth_text,
             text_target=args.target_text,
@@ -137,66 +133,42 @@ class EnvironmentLoader:
             thresholds=thresholds,
             subspace_optimization=args.subspace_optimization,
             random_matrix=random_matrix,
-            multi_gpu=multi_gpu,
         )
 
-    def _load_required_models(self, multi_gpu: bool = False):
+    def load_required_models(self):
         print("Loading TTS Model (StyleTTS2)...")
         tts = StyleTTS2()
-        tts.load_models()
-        tts.load_checkpoints()
-        tts.sample_diffusion()
 
         print("Loading ASR Model (Whisper)...")
         asr = whisper.load_model("tiny", device=self.device)
 
-        # Enable multi-GPU for ASR if requested
-        if multi_gpu:
-            tts.enable_multi_gpu()
-            asr = nn.DataParallel(asr)
+        return tts, asr
 
-        return ModelData(tts_model=tts, asr_model=asr)
-
-    def _generate_audio_data(self, config, tts):
+    def generate_audio_data(self, mode: AttackMode, text_gt: str, text_target: str, tts: StyleTTS2):
+        """Generate audio data for ground-truth and target texts."""
         noise = torch.randn(1, 1, 256).to(self.device)
 
-        # Extract embeddings
-        if config.mode is AttackMode.TARGETED:
-            # Text -> Tokens, while adding tokens if necessary
-            tokens_gt, tokens_target = addNumbersPattern(
-                tts.preprocess_text(config.text_gt),
-                tts.preprocess_text(config.text_target),
+        if mode is AttackMode.TARGETED:
+            tokens_gt, tokens_target = add_numbers_pattern(
+                tts.preprocess_text(text_gt),
+                tts.preprocess_text(text_target),
                 [16, 4]
             )
-            h_text_gt, h_bert_raw_gt, h_bert_gt, input_lengths, text_mask = tts.extract_embeddings(tokens_gt)
-            h_text_target, h_bert_raw_target, h_bert_target, _, _ = tts.extract_embeddings(tokens_target)
+            audio_embedding_data_gt = tts.extract_embeddings(tokens_gt, noise)
+            audio_embedding_data_target = tts.extract_embeddings(tokens_target, noise)
         else:
-            tokens_gt = tts.preprocess_text(config.text_gt)
-            h_text_gt, h_bert_raw_gt, h_bert_gt, input_lengths, text_mask = tts.extract_embeddings(tokens_gt)
+            audio_embedding_data_gt = tts.extract_embeddings(tts.preprocess_text(text_gt), noise)
 
-            # Random embeddings for untargeted modes
-            h_text_target = torch.randn_like(h_text_gt)
-            h_text_target /= h_text_target.norm()
+            # Random normalized embeddings for untargeted modes
+            h_bert_target = generate_similar_noise(audio_embedding_data_gt.h_bert)
+            h_text_target = generate_similar_noise(audio_embedding_data_gt.h_text)
+            style_ac_target = generate_similar_noise(audio_embedding_data_gt.style_vector_acoustic)
+            style_pro_target = generate_similar_noise(audio_embedding_data_gt.style_vector_prosodic)
 
-            h_bert_raw_target = torch.randn_like(h_bert_raw_gt)
-            h_bert_raw_target /= h_bert_raw_target.norm()
-
-            h_bert_target = torch.randn_like(h_bert_gt)
-            h_bert_target /= h_bert_target.norm()
-
-        # Generate style vectors
-        style_ac_gt, style_pro_gt = tts.compute_style_vector(noise, h_bert_raw_gt, embedding_scale=1, diffusion_steps=5)
-        style_ac_target, style_pro_target = tts.compute_style_vector(noise, h_bert_raw_target, embedding_scale=1, diffusion_steps=5)
+            audio_embedding_data_target = AudioEmbeddingData(audio_embedding_data_gt.input_length, audio_embedding_data_gt.text_mask, h_bert_target, h_text_target, style_ac_target, style_pro_target)
 
         # Run inference for ground-truth and target
-        audio_gt = tts.inference_on_embedding(input_lengths, text_mask, h_bert_gt, h_text_gt, style_ac_gt, style_pro_gt)
-        audio_target = tts.inference_on_embedding(input_lengths, text_mask, h_bert_target, h_text_target, style_ac_target, style_pro_target)
-        
-        return AudioData(
-            audio_gt, audio_target,
-            h_text_gt, h_text_target,
-            h_bert_raw_gt, h_bert_raw_target,
-            h_bert_gt, h_bert_target,
-            input_lengths, text_mask,
-            style_ac_gt, style_pro_gt,
-        )
+        audio_gt = tts.inference_on_embedding(audio_embedding_data_gt).flatten()
+        audio_target = tts.inference_on_embedding(audio_embedding_data_target).flatten()
+
+        return audio_gt, audio_target, audio_embedding_data_gt, audio_embedding_data_target

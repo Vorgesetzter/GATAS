@@ -1,7 +1,7 @@
 import torch
 from whisper.tokenizer import get_tokenizer
 from Objectives.base import BaseObjective
-from Datastructures.dataclass import ModelData, StepContext, AudioData, EmbeddingData
+from Datastructures.dataclass import ModelData, StepContext, ModelEmbeddingData
 from Datastructures.enum import FitnessObjective
 
 
@@ -21,18 +21,11 @@ class WhisperProbObjective(BaseObjective):
     """
     objective_type = FitnessObjective.WHISPER_PROB
 
-    def __init__(
-        self,
-        config,
-        model_data: ModelData,
-        device: str = None,
-        embedding_data: EmbeddingData = None,
-        audio_data: AudioData = None
-    ):
-        super().__init__(config, model_data, device, embedding_data, audio_data)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # Get the actual ASR model (unwrap DataParallel if needed)
-        self._real_asr_model = self._get_real_asr_model(model_data.asr_model)
+        self._real_asr_model = self._get_real_asr_model(self.model_data.asr_model)
 
         # Prepare tokenized target text for probability computation
         self._target_tokens_template = self._prepare_whisper_tokens()
@@ -48,7 +41,7 @@ class WhisperProbObjective(BaseObjective):
         tokenizer = get_tokenizer(self._real_asr_model.is_multilingual)
         target_ids = (
             list(tokenizer.sot_sequence) +
-            tokenizer.encode(self.config.text_target) +
+            tokenizer.encode(self.text_target) +
             [tokenizer.eot]
         )
         return torch.tensor([target_ids]).to(self.device)
@@ -57,13 +50,12 @@ class WhisperProbObjective(BaseObjective):
     def supports_batching(self) -> bool:
         return True
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> list[float]:
+    def _calculate_logic(self, context: StepContext) -> list[float]:
         """
         Computes the whisper probability fitness values from the mel spectrogram.
 
         Args:
             context: StepContext containing mel_batch
-            audio_data: AudioData (not used directly)
 
         Returns:
             List of fitness values (0 = best, 1 = worst)

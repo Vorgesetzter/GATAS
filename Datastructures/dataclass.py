@@ -31,9 +31,6 @@ class ConfigData:
     subspace_optimization: bool
     random_matrix: torch.Tensor
 
-    # --- Hardware ---
-    multi_gpu: bool = False
-
     def print_summary(self):
         """Prints the formatted configuration to console."""
         print("=== Configuration ===")
@@ -58,12 +55,8 @@ class ConfigData:
         else:
             print("Thresholds:        None (Running full generations)")
 
-        if self.multi_gpu:
-            import torch
-            gpu_count = torch.cuda.device_count()
-            print(f"Multi-GPU:             Enabled ({gpu_count} GPUs)")
-        else:
-            print(f"Multi-GPU:             Disabled")
+        if torch.cuda.is_available():
+            print(f"Cuda on ({torch.cuda.device_count()} GPUs)")
 
         print("=====================")
 
@@ -90,24 +83,30 @@ class ModelData:
     wav2vec_processor: Optional[Any] = None  # Wav2Vec2Processor
 
 @dataclass
+class LimitedConfigData:
+    text_gt: str
+    text_target: str
+
+    mode: AttackMode
+
+@dataclass
+class AudioEmbeddingData:
+    input_length: torch.Tensor
+    text_mask: torch.Tensor
+
+    h_bert: torch.Tensor
+    h_text: torch.Tensor
+
+    style_vector_acoustic: torch.Tensor
+    style_vector_prosodic: torch.Tensor
+
+@dataclass
 class AudioData:
     audio_gt: torch.Tensor
     audio_target: torch.Tensor
 
-    h_text_gt: torch.Tensor
-    h_text_target: torch.Tensor
-
-    h_bert_raw_gt: torch.Tensor
-    h_bert_raw_target: torch.Tensor
-
-    h_bert_gt: torch.Tensor
-    h_bert_target: torch.Tensor
-
-    input_lengths: torch.Tensor
-    text_mask: torch.Tensor
-
-    style_vector_acoustic: torch.Tensor
-    style_vector_prosodic: torch.Tensor
+    audio_embedding_gt: AudioEmbeddingData
+    audio_embedding_target: AudioEmbeddingData
 
 @dataclass
 class BestMixedAudio:
@@ -117,7 +116,7 @@ class BestMixedAudio:
     h_bert: torch.Tensor
 
 @dataclass
-class EmbeddingData:
+class ModelEmbeddingData:
     """
     Dynamic container for conditional reference embeddings.
     Initialize with EmbeddingData() to start empty.

@@ -1,6 +1,6 @@
 import jiwer
 from Objectives.base import BaseObjective
-from Datastructures.dataclass import ModelData, StepContext, AudioData, EmbeddingData
+from Datastructures.dataclass import ModelData, StepContext, ModelEmbeddingData
 from Datastructures.enum import FitnessObjective
 
 
@@ -19,16 +19,8 @@ class WerTargetObjective(BaseObjective):
     """
     objective_type = FitnessObjective.WER_TARGET
 
-    def __init__(
-        self,
-        config,
-        model_data: ModelData,
-        device: str = None,
-        embedding_data: EmbeddingData = None,
-        audio_data: AudioData = None
-    ):
-        super().__init__(config, model_data, device, embedding_data, audio_data)
-        self.text_target = config.text_target
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # Lazy load WER transformations if not already loaded
         if self.model_data.wer_transformations is None:
@@ -45,7 +37,7 @@ class WerTargetObjective(BaseObjective):
     def supports_batching(self) -> bool:
         return True
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> list[float]:
+    def _calculate_logic(self, context: StepContext) -> list[float]:
         """
         Batched WER calculation.
         Returns list of scores in range (0, 1) where 0 = matches target (good), 1 = different (bad).

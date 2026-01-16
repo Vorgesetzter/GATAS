@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import Wav2Vec2Model, Wav2Vec2Processor
 from Objectives.base import BaseObjective
-from Datastructures.dataclass import ModelData, StepContext, AudioData, EmbeddingData
+from Datastructures.dataclass import ModelData, StepContext, ModelEmbeddingData
 from Datastructures.enum import AttackMode, FitnessObjective
 
 
@@ -27,18 +27,11 @@ class Wav2VecAsrObjective(BaseObjective):
     """
     objective_type = FitnessObjective.WAV2VEC_ASR
 
-    def __init__(
-        self,
-        config,
-        model_data: ModelData,
-        device: str = None,
-        embedding_data: EmbeddingData = None,
-        audio_data: AudioData = None
-    ):
-        super().__init__(config, model_data, device, embedding_data, audio_data)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # Validate mode
-        if config.mode is AttackMode.UNTARGETED:
+        if self.mode is AttackMode.UNTARGETED:
             raise ValueError("AttackMode.UNTARGETED incompatible with Wav2VecAsrObjective")
 
         # Load Wav2Vec2 model if not already loaded
@@ -67,7 +60,7 @@ class Wav2VecAsrObjective(BaseObjective):
         # Cannot batch because TTS synthesis is required per-sample
         return False
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> float:
+    def _calculate_logic(self, context: StepContext) -> float:
         """Process single sample (TTS synthesis required)."""
         audio_mixed = context.audio_mixed
         asr_text = context.clean_text
@@ -86,9 +79,9 @@ class Wav2VecAsrObjective(BaseObjective):
             text_mask,
             h_bert,
             h_text,
-            audio_data.style_vector_acoustic,
-            audio_data.style_vector_prosodic
-        )
+            self.style_vector_acoustic,
+            self.style_vector_prosodic
+        ).flatten()
 
         with torch.no_grad():
             # Get embedding for ASR-synthesized audio

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from sentence_transformers import SentenceTransformer, util
 from Objectives.base import BaseObjective
-from Datastructures.dataclass import ModelData, StepContext, AudioData, EmbeddingData
+from Datastructures.dataclass import ModelData, StepContext, ModelEmbeddingData
 from Datastructures.enum import AttackMode, FitnessObjective
 
 
@@ -20,18 +20,11 @@ class SbertTargetObjective(BaseObjective):
     """
     objective_type = FitnessObjective.SBERT_TARGET
 
-    def __init__(
-        self,
-        config,
-        model_data: ModelData,
-        device: str = None,
-        embedding_data: EmbeddingData = None,
-        audio_data: AudioData = None
-    ):
-        super().__init__(config, model_data, device, embedding_data, audio_data)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         # Validate mode
-        if config.mode is AttackMode.UNTARGETED:
+        if self.mode is AttackMode.UNTARGETED:
             raise ValueError("AttackMode.UNTARGETED incompatible with SbertTargetObjective")
 
         # Load SBERT model if not already loaded
@@ -52,7 +45,7 @@ class SbertTargetObjective(BaseObjective):
         # Compute target embedding if not already computed
         if self.embedding_data is not None and self.embedding_data.s_bert_embedding_target is None:
             self.embedding_data.s_bert_embedding_target = self.sbert_model.encode(
-                config.text_target,
+                self.text_target,
                 convert_to_tensor=True,
                 normalize_embeddings=True
             )
@@ -61,7 +54,7 @@ class SbertTargetObjective(BaseObjective):
     def supports_batching(self) -> bool:
         return True
 
-    def _calculate_logic(self, context: StepContext, audio_data: AudioData) -> list[float]:
+    def _calculate_logic(self, context: StepContext) -> list[float]:
         """Process entire batch at once."""
         asr_texts = context.clean_text
         if isinstance(asr_texts, str):

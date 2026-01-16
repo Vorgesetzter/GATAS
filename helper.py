@@ -6,6 +6,10 @@ import whisper
 import requests
 from dotenv import load_dotenv
 from tqdm.auto import tqdm
+import platform
+import numpy as np
+
+from Datastructures.enum import AttackMode
 
 
 def _asr_batch_inference(asr_model, audio_batch, device):
@@ -45,104 +49,6 @@ def length_to_mask(lengths: Tensor) -> Tensor:
     mask = mask.type_as(lengths)  # Assign mask the same type as lengths
     mask = torch.gt(mask + 1, lengths.unsqueeze(1))  # gt = greater than, compares each value from lengths to a row of values in mask; unsqueeze = splits vector lengths into vectors of size 1
     return mask  # returns a mask of shape (batch_size, max_length) where mask[i, j] = 1 if j < lengths[i] and mask[i, j] = 0 otherwise.
-
-def _pad_with_pattern(tensor: Tensor, amount: int, pattern: list[int]) -> Tensor:
-
-    padding = torch.as_tensor(pattern, device=tensor.device, dtype=tensor.dtype)[torch.arange(amount, device=tensor.device) % len(pattern)]
-
-    for _ in range(tensor.dim() - 1):
-        padding = padding.unsqueeze(0)
-    padding = padding.expand(*tensor.shape[:-1], amount)
-
-    return torch.cat([tensor, padding], dim=-1)
-
-def addNumbersPattern(a: Tensor, b: Tensor, pattern: list[int]) -> tuple[Tensor, Tensor]:
-
-    len_a = a.size(-1)
-    len_b = b.size(-1)
-
-    # If equal: nothing to do
-    if len_a == len_b:
-        return a, b
-
-    # Determine which tensor needs padding
-    if len_a < len_b:
-        a = _pad_with_pattern(a, len_b - len_a, pattern)
-    else:
-        b = _pad_with_pattern(b, len_a - len_b, pattern)
-
-    return a, b
-
-def _extend_to_size(x: torch.Tensor, target_size: int) -> torch.Tensor:
-    """
-    Extends the last dimension of x to `target_size` by repeating elements.
-    Supports inputs of any dimension (e.g., [Batch, Dim] or [Batch, 1, Dim]).
-    """
-    # FIX: Get only the last dimension 'a', ignore preceding dimensions
-    a = x.shape[-1]
-
-    # If already large enough, just crop
-    if a >= target_size:
-        return x[..., :target_size] # Use ... to keep all leading dimensions
-
-    # How many repeats per original position?
-    base = target_size // a
-    rem = target_size % a
-
-    repeats = torch.full((a,), base, device=x.device, dtype=torch.long)
-    if rem > 0:
-        repeats[:rem] += 1
-
-    # Build index pattern
-    idx = torch.arange(a, device=x.device).repeat_interleave(repeats)
-    assert idx.numel() == target_size
-
-    # Apply index pattern to the last dimension using Ellipsis (...)
-    return x[..., idx]
-
-def adjustInterpolationVector(IV: Tensor, matrix: Tensor, subspace_optimization: bool) -> Tensor:
-
-    # Matrix Multiplication, since IV not Scalar Value
-    if IV.shape[-1] != 1:
-        if subspace_optimization:
-            IV = IV @ matrix
-        else:
-            IV = _extend_to_size(IV, 512)
-
-    # 1. Swap the last two dimensions (Works for [L, C] or [B, L, C])
-    IV = IV.transpose(-1, -2)
-
-    # 2. Add batch dimension only if it's missing (i.e., if it is 2D)
-    if IV.dim() < 3:
-        IV = IV.unsqueeze(0)
-
-    return IV
-
-
-# Add this to helper.py
-import numpy as np
-
-
-def get_pareto_mask(fitness_matrix):
-    """
-    Returns a boolean mask of shape (N,) where True indicates the row is
-    non-dominated (Pareto efficient).
-    """
-    population_size = fitness_matrix.shape[0]
-    is_efficient = np.ones(population_size, dtype=bool)
-
-    for i in range(population_size):
-        if is_efficient[i]:
-            current_candidate = fitness_matrix[i]
-            all_better_or_equal = np.all(fitness_matrix <= current_candidate, axis=1)
-            any_strictly_better = np.any(fitness_matrix < current_candidate, axis=1)
-
-            dominators = all_better_or_equal & any_strictly_better
-
-            if np.any(dominators):
-                is_efficient[i] = False
-
-    return is_efficient
 
 def get_local_pareto_front(fitness_matrix):
     """Returns only the non-dominated rows from a fitness matrix."""
@@ -202,4 +108,64 @@ def send_whatsapp_notification():
         tqdm.write("WhatsApp notification sent.")
     except Exception as e:
         tqdm.write(f"Error sending WhatsApp: {e}")
+
+def write_run_summary(folder_path, text_best, candidate, gen_count, elapsed_time, config_data):
+
+    # 1. System Metadata
+    os_info = f"{platform.system()} {platform.release()}"
+    gpu_info = "CPU Only"
+    if torch.cuda.is_available():
+        vram = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+        gpu_info = f"{torch.cuda.get_device_name(0)} ({vram:.2f} GB VRAM)"
+
+    avg_per_gen = elapsed_time / gen_count if gen_count > 0 else 0
+
+    summary_path = os.path.join(folder_path, "run_summary.txt")
+
+    with open(summary_path, "w", encoding="utf-8") as f:
+        f.write("=" * 50 + "\n")
+        f.write(" ADVERSARIAL TTS OPTIMIZATION REPORT\n")
+        f.write("=" * 50 + "\n\n")
+
+        f.write("--- [1] INPUT DATA ---\n")
+        # Assuming these paths are stored in your config or audio_data
+        f.write(f"GT Text:      {config_data.text_gt}\n")
+        f.write(f"Target Text:  {config_data.text_target if config_data.text_target else '[NONE]'}\n")
+
+        f.write("\n--- [2] CLI ARGUMENTS & CONFIG ---\n")
+        f.write(f"Attack Mode:       {config_data.mode.name}\n")
+        f.write(f"Objectives:        {', '.join([obj.name for obj in config_data.active_objectives])}\n")
+        f.write(f"Population Size:   {config_data.pop_size}\n")
+        f.write(f"Size Per Phoneme:  {config_data.size_per_phoneme}\n")
+        f.write(f"IV Scalar:         {config_data.iv_scalar}\n")
+        f.write(f"Subspace Opt:      {config_data.subspace_optimization}\n")
+
+        if config_data.thresholds:
+            t_str = ", ".join([f"{k.name} <= {v}" for k, v in config_data.thresholds.items()])
+            f.write(f"Early Stopping:    {t_str}\n")
+        else:
+            f.write(f"Early Stopping:    Off (Ran full duration)\n")
+
+        f.write("\n--- [3] PERFORMANCE & HARDWARE ---\n")
+        f.write(f"Hardware:          {gpu_info}\n")
+        f.write(f"OS/CPU:            {os_info} | {platform.processor()}\n")
+        f.write(f"Gens Completed:    {gen_count}\n")
+        f.write(f"Total Time:        {elapsed_time:.2f}s\n")
+        f.write(f"Efficiency:        {avg_per_gen:.2f}s per generation\n")
+
+        f.write("\n--- [4] BEST CANDIDATE RESULTS ---\n")
+        f.write(f"Selection Metric:  Euclidean Distance to Origin (Knee Point)\n")
+        f.write(f"Generation Found:  {getattr(candidate, 'generation', 'Unknown')}\n")
+        f.write("-" * 30 + "\n")
+
+        # Detailed Fitness Scores
+        for obj, score in zip(config_data.active_objectives, candidate.fitness):
+            f.write(f"  {obj.name:<15}: {float(score):.8f}\n")
+
+        f.write("-" * 30 + "\n")
+        f.write(f"Final Transcription: \"{text_best}\"\n")
+
+        f.write("\n" + "=" * 50 + "\n")
+        f.write(" END OF REPORT\n")
+        f.write("=" * 50 + "\n")
 
