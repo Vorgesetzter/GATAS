@@ -29,7 +29,6 @@ class AdversarialTrainer:
         self,
         tts_model,
         asr_model,
-        active_objectives: list[FitnessObjective],
         thresholds: dict[FitnessObjective, float],
         objectives: dict[FitnessObjective, BaseObjective],
         vector_manipulator: VectorManipulator,
@@ -38,7 +37,6 @@ class AdversarialTrainer:
         # Store state
         self.tts_model = tts_model
         self.asr_model = asr_model.module if isinstance(asr_model, torch.nn.DataParallel) else asr_model
-        self.active_objectives = active_objectives
         self.thresholds = thresholds
         self.objectives = objectives
         self.vector_manipulator = vector_manipulator
@@ -98,7 +96,7 @@ class AdversarialTrainer:
 
                     # Format the string (e.g., "WER: 0.15 (Avg: 0.40) | PESQ: ...")
                     stats_parts = []
-                    for idx, obj in enumerate(self.active_objectives):
+                    for idx, obj in enumerate(self.objectives):
                         stats_parts.append(
                             f"{obj.name}: {current_mins[idx]:.4f} (Avg: {current_means[idx]:.4f})"
                         )
@@ -126,7 +124,7 @@ class AdversarialTrainer:
         total_elapsed_time = 0
 
         # Create list to store scores for this generation
-        fitness_per_objective: list[list[float]] = [[] for _ in self.active_objectives]
+        fitness_per_objective: list[list[float]] = [[] for _ in self.objectives]
 
         # Get current population from optimizer
         interpolation_vectors_full = torch.from_numpy(optimizer.get_x_current()).to(self.device).float()
@@ -193,9 +191,9 @@ class AdversarialTrainer:
         garbage_mask = np.array([len(t) < 2 for t in asr_texts], dtype=bool)
 
         # Build score matrix: [batch_size, num_objectives]
-        score_matrix = np.zeros((current_batch_size, len(self.active_objectives)), dtype=np.float32)
+        score_matrix = np.zeros((current_batch_size, len(self.objectives)), dtype=np.float32)
 
-        for obj_idx, obj in enumerate(self.active_objectives):
+        for obj_idx, obj in enumerate(self.objectives):
             scores = np.array(batch_scores_dict[obj], dtype=np.float32)
             scores[garbage_mask] = 1.0  # Penalize garbage samples
 
@@ -228,7 +226,7 @@ class AdversarialTrainer:
         threshold_mask = []  # Which objectives have thresholds
         threshold_values = []
 
-        for obj_idx, obj in enumerate(self.active_objectives):
+        for obj_idx, obj in enumerate(self.objectives):
             if obj in self.thresholds:
                 threshold_mask.append(obj_idx)
                 threshold_values.append(self.thresholds[obj])

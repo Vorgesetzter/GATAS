@@ -17,7 +17,15 @@ class Whisper:
         mel_batch = whisper.log_mel_spectrogram(audio_tensor_asr, n_mels=self.model.dims.n_mels).to(self.device)
 
         # 4. Run ASR decoding (without_timestamps reduces hallucination on padded silence)
-        decode_options = whisper.DecodingOptions(without_timestamps=True)
+        # temperature=0 forces greedy decoding for deterministic results
+        # Disable fallback thresholds to prevent retry-with-randomness on adversarial audio
+        decode_options = whisper.DecodingOptions(
+            without_timestamps=True,
+            temperature=0,
+            compression_ratio_threshold=None,
+            logprob_threshold=None,
+            no_speech_threshold=None,
+        )
         results = whisper.decode(self.model, mel_batch, decode_options)
 
         # 5. Process ASR results (handle single vs batch)

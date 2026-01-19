@@ -93,7 +93,7 @@ def main():
     vector_manipulator = VectorManipulator(audio_embedding_gt, audio_embedding_target.h_text, config_data)
 
     # 3. Create Trainer and Logger
-    trainer = AdversarialTrainer(tts_model, asr_model, config_data.active_objectives, config_data.thresholds, objectives, vector_manipulator, device)
+    trainer = AdversarialTrainer(tts_model, asr_model, config_data.thresholds, objectives, vector_manipulator, device)
     logger = RunLogger(config_data.active_objectives, tts_model, asr_model, vector_manipulator, device)
 
     # 4. Run optimization loops

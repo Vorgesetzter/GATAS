@@ -14,18 +14,20 @@ os.chdir("..")
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    active_objectives = ["WER_GT", "PESQ"]
-    active_objectives = [obj for obj in FitnessObjective if obj in active_objectives]
-
+    active_objectives = [FitnessObjective.WER_GT, FitnessObjective.PESQ]
     mode = AttackMode.TARGETED
 
+    print("Loading Environment...")
     loader = EnvironmentLoader(device)
 
-    tts = StyleTTS2()
-    asr = Whisper()
+    print("Loading TTS Model (StyleTTS2)...")
+    tts = StyleTTS2(device=device)
+
+    print("Loading ASR Model (Whisper)...")
+    asr = Whisper(device=device)
 
     text_1 = "I think the NFL is lame and boring"
-    text_2 = "The Los Angeles Rams are the worst Team in the world"
+    text_2 = "I think we aint a furl is lame and boring"
 
     noise = torch.randn(1, 1, 256).to(device)
 
@@ -49,6 +51,19 @@ def main():
 
     print(f"ASR 1: {asr_1}")
     print(f"ASR 2: {asr_2}")
+
+    # Create context for evaluation (testing audio_1)
+    context = ObjectiveContext(
+        audio_mixed_batch=audio_2,
+        asr_texts=asr_2,
+        interpolation_vectors=torch.zeros(1, 1),  # Dummy - not used by WER/PESQ
+    )
+
+    # Evaluate each objective
+    print("\n=== Objective Scores ===")
+    for obj_enum, objective in objectives.items():
+        scores = objective.calculate_score(context)
+        print(f"{obj_enum.name}: {scores}")
 
 if __name__ == "__main__":
     main()
