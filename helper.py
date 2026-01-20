@@ -12,37 +12,6 @@ import soundfile as sf
 
 from Datastructures.enum import AttackMode
 
-
-def _asr_batch_inference(asr_model, audio_batch, device):
-    """
-    Führt Whisper ASR auf einem Batch von Audio-Tensoren aus.
-    """
-    # 1. Padden/Trimmen & Log-Mel Spectrograms (Sequenziell ist ok, da sehr schnell)
-    mels = []
-    for audio in audio_batch:
-        # Whisper erwartet 30s Audio (16k * 30 = 480,000 Samples)
-        # Pad/Trim Logic
-        audio = whisper.pad_or_trim(audio)
-
-        # Log-Mel
-        mel = whisper.log_mel_spectrogram(audio).to(device)
-        mels.append(mel)
-
-    # 2. Stacken zu [Batch_Size, 80, 3000]
-    batch_mels = torch.stack(mels)
-
-    # 3. Batch Inferenz (Das ist der Speed-Boost!)
-    options = whisper.DecodingOptions(fp16=False, language='en')
-
-    # decode() gibt eine Liste von Results zurück
-    results = whisper.decode(asr_model, batch_mels, options)
-
-    # 4. Text & LogProbs extrahieren
-    texts = [r.text for r in results]
-    avg_logprobs = [r.avg_logprob for r in results]  # Whisper liefert avg_logprob direkt mit
-
-    return texts, avg_logprobs
-
 def length_to_mask(lengths: Tensor) -> Tensor:
     mask = torch.arange(lengths.max())  # Creates a Vector [0,1,2,3,...,x], where x = biggest value in lengths
     mask = mask.unsqueeze(0)  # Creates a Matrix [1,x] from Vector [x]

@@ -14,7 +14,7 @@ os.chdir("..")
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    active_objectives = [FitnessObjective.WER_GT, FitnessObjective.PESQ]
+    active_objectives = [FitnessObjective.WER_GT, FitnessObjective.WHISPER_PROB]
     mode = AttackMode.TARGETED
 
     print("Loading Environment...")
@@ -46,8 +46,8 @@ def main():
         audio_gt=audio_1,
     )
 
-    asr_1 = asr.inference(audio_1)
-    asr_2 = asr.inference(audio_2)
+    asr_1, mel_batch_1 = asr.inference(audio_1)
+    asr_2, mel_batch_2 = asr.inference(audio_2)
 
     print(f"ASR 1: {asr_1}")
     print(f"ASR 2: {asr_2}")
@@ -56,7 +56,8 @@ def main():
     context = ObjectiveContext(
         audio_mixed_batch=audio_2,
         asr_texts=asr_2,
-        interpolation_vectors=torch.zeros(1, 1),  # Dummy - not used by WER/PESQ
+        interpolation_vectors=torch.zeros(1, 1),
+        mel_batch=mel_batch_1
     )
 
     # Evaluate each objective

@@ -171,13 +171,14 @@ class AdversarialTrainer:
         audio_mixed_batch = self.tts_model.inference_on_embedding(audio_embedding_data_mixed)
 
         # 2. ASR Inference
-        asr_texts = self.asr_model.inference(audio_mixed_batch)
+        asr_texts, mel_batch = self.asr_model.inference(audio_mixed_batch)
 
         # 3. Create context and evaluate objectives
         context = ObjectiveContext(
             audio_mixed_batch=audio_mixed_batch,
             asr_texts=asr_texts,
             interpolation_vectors=interpolation_vectors,
+            mel_batch=mel_batch
         )
         batch_scores_dict = self.evaluate_batch(context)
 

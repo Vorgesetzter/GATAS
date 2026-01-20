@@ -29,4 +29,4 @@ class Whisper:
         # clean_texts = [re.sub(r'[^a-zA-Z\s]', '', t).strip() for t in asr_texts]
         clean_texts = [t.translate(str.maketrans('', '', string.punctuation)).strip() for t in asr_texts]
 
-        return clean_texts
+        return clean_texts, mel_batch
