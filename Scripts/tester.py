@@ -27,7 +27,7 @@ def main():
     asr = Whisper(device=device)
 
     text_1 = "I think the NFL is lame and boring"
-    text_2 = "I think we aint a furl is lame and boring"
+    text_2 = "This is a very different sentence"
 
     noise = torch.randn(1, 1, 256).to(device)
 
@@ -57,7 +57,7 @@ def main():
         audio_mixed_batch=audio_1,
         asr_texts=asr_1,
         interpolation_vectors=torch.zeros(1, 1),
-        mel_batch=mel_batch_1
+        mel_batch=mel_batch_2
     )
 
     # Evaluate each objective

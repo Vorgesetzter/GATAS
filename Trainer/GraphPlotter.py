@@ -147,7 +147,7 @@ class GraphPlotter:
 
             self._create_gradient_line(ax, generations, y_values)
 
-            ax.plot([], [], color=self.colors[-1], label="Population Mean")
+            ax.plot([], [], color=self.colors[-1])
             ax.set_title(f"Objective: {obj.name}", fontsize=14)
             ax.set_ylabel("Fitness Score")
             ax.grid(True, alpha=0.3)
@@ -185,7 +185,7 @@ class GraphPlotter:
 
             self._create_gradient_line(ax, generations, y_values)
 
-            ax.plot([], [], color=self.colors[-1], label="Best (Min) Fitness")
+            ax.plot([], [], color=self.colors[-1])
             ax.set_title(f"Objective: {obj.name}", fontsize=14)
             ax.set_ylabel("Min Fitness Score")
             ax.grid(True, linestyle=':', alpha=0.6)
@@ -217,14 +217,17 @@ class GraphPlotter:
 
         if not hv_history: return
 
-        plt.figure(figsize=(10, 5))
-        plt.plot(range(1, len(hv_history) + 1), hv_history, color='teal', linewidth=2.5)
+        fig, ax = plt.subplots(figsize=(10, 5))
 
-        plt.title("Hypervolume Convergence", fontsize=16)
-        plt.xlabel("Generation", fontsize=12)
-        plt.ylabel("Hypervolume (Area)", fontsize=12)
-        plt.grid(True, linestyle='--', alpha=0.7)
-        plt.fill_between(range(1, len(hv_history) + 1), hv_history, color='teal', alpha=0.1)
+        generations = np.arange(len(hv_history), dtype=float) + 1
+        hv_values = np.array(hv_history, dtype=float)
+
+        self._create_gradient_line(ax, generations, hv_values)
+
+        ax.set_title("Hypervolume Convergence", fontsize=16)
+        ax.set_xlabel("Generation", fontsize=12)
+        ax.set_ylabel("Hypervolume (Area)", fontsize=12)
+        ax.grid(True, linestyle='--', alpha=0.7)
 
         plt.tight_layout()
         save_path = os.path.join(self.folder_path, "hypervolume_convergence.png")
