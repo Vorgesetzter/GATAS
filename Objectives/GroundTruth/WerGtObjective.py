@@ -52,23 +52,15 @@ class WerGtObjective(BaseObjective):
                 scores.append(1.0)  # Penalize invalid
                 continue
 
-            if len(asr_text.split()) > len(self.text_gt.split()):
-                raw_wer = jiwer.wer(
-                    asr_text,
-                    self.text_gt,
-                    reference_transform=self.wer_transformations,
-                    hypothesis_transform=self.wer_transformations,
-                )
-            else:
-                raw_wer = jiwer.wer(
-                    self.text_gt,
-                    asr_text,
-                    reference_transform=self.wer_transformations,
-                    hypothesis_transform=self.wer_transformations,
-                )
+            raw_wer = jiwer.wer(
+                self.text_gt,
+                asr_text,
+                reference_transform=self.wer_transformations,
+                hypothesis_transform=self.wer_transformations,
+            )
 
-            # Normalize to (0, 1): raw_wer 0 -> 1 (100% similar), raw_wer 1+ -> 0 (0% similar)
-            # val = min(float(raw_wer), 2.0)
+            raw_wer = min(float(raw_wer), 2.0)
+            raw_wer /= 2.0
 
             if raw_wer > 1:
                 tqdm.write(f"WER > 1 for \"{asr_text}\"")

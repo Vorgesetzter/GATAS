@@ -9,12 +9,12 @@ from Datastructures.dataclass import ModelData, ObjectiveContext
 from Datastructures.enum import AttackMode
 
 import os
-os.chdir("..")
+os.chdir("../..")
 
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    active_objectives = [FitnessObjective.WER_GT, FitnessObjective.WHISPER_PROB]
+    active_objectives = [FitnessObjective.WHISPER_PROB]
     mode = AttackMode.TARGETED
 
     print("Loading Environment...")
@@ -26,38 +26,39 @@ def main():
     print("Loading ASR Model (Whisper)...")
     asr = Whisper(device=device)
 
-    text_1 = "I think the NFL is lame and boring"
-    text_2 = "This is a very different sentence"
+    text_gt = "I think the NFL is lame and boring"
+    text_target = "This is a very different sentence"
 
     noise = torch.randn(1, 1, 256).to(device)
 
-    token_1 = tts.preprocess_text(text_1)
-    token_2 = tts.preprocess_text(text_2)
+    token_gt = tts.preprocess_text(text_gt)
+    token_target = tts.preprocess_text(text_target)
 
-    audio_1 = tts.inference_on_token(token_1, noise)
-    audio_2 = tts.inference_on_token(token_2, noise)
+    audio_gt = tts.inference_on_token(token_gt, noise)
+    audio_target = tts.inference_on_token(token_target, noise)
+    audio_target = audio_gt
 
     objectives = loader.initialize_objectives(
         active_objectives=active_objectives,
         model_data=ModelData(tts_model=tts, asr_model=asr),
-        text_gt=text_1,
-        text_target=text_1,
+        text_gt=text_gt,
+        text_target=text_target,
         mode=mode,
-        audio_gt=audio_1,
+        audio_gt=audio_gt,
     )
 
-    asr_1, mel_batch_1 = asr.inference(audio_1)
-    asr_2, mel_batch_2 = asr.inference(audio_2)
+    asr_gt, mel_batch_gt = asr.inference(audio_gt)
+    asr_target, mel_batch_target = asr.inference(audio_target)
 
-    print(f"ASR 1: {asr_1}")
-    print(f"ASR 2: {asr_2}")
+    print(f"ASR Ground-Truth: {asr_gt}")
+    print(f"ASR Target: {asr_target}")
 
     # Create context for evaluation (testing audio_1)
     context = ObjectiveContext(
-        audio_mixed_batch=audio_1,
-        asr_texts=asr_1,
+        audio_mixed_batch=audio_target,
+        asr_texts=asr_target,
         interpolation_vectors=torch.zeros(1, 1),
-        mel_batch=mel_batch_2
+        mel_batch=mel_batch_target
     )
 
     # Evaluate each objective
