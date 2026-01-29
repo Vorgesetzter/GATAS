@@ -38,38 +38,28 @@ class MerGtObjective(BaseObjective):
         return True
 
     def _calculate_logic(self, context: ObjectiveContext) -> list[float]:
+        """
+        Calculate MER for each ASR text against ground truth.
+        Returns list of scores in range (0, 1) where 0 = different (good), 1 = same (bad).
+        """
         asr_texts = context.asr_texts
 
-        # 1. Filter empty/invalid texts to avoid crashes
-        # We assign them a score of 1.0 (High Similarity/Bad for attack)
-        # to force the optimizer to produce valid text.
-        valid_indices = [i for i, t in enumerate(asr_texts) if t and len(t) >= 2]
-        valid_texts = [asr_texts[i] for i in valid_indices]
+        scores = []
+        for asr_text in asr_texts:
+            # Skip empty/invalid texts
+            if not asr_text or len(asr_text) < 2:
+                scores.append(1.0)  # Penalize invalid
+                continue
 
-        scores = [1.0] * len(asr_texts)  # Default bad score
+            raw_mer = jiwer.mer(
+                self.text_gt,
+                asr_text,
+                reference_transform=self.transformations,
+                hypothesis_transform=self.transformations,
+            )
 
-        if not valid_texts:
-            return scores
-
-        # 2. Prepare Reference batch
-        refs = [self.text_gt] * len(valid_texts)
-
-        # 3. Calculate MER (Match Error Rate)
-        # mer is 0.0 for perfect match, 1.0 for total mismatch
-        mer_vals = jiwer.mer(
-            reference=refs,
-            hypothesis=valid_texts,
-            reference_transform=self.transformations,
-            hypothesis_transform=self.transformations
-        )
-
-        if isinstance(mer_vals, float):
-            mer_vals = [mer_vals]
-
-        # 4. Invert Logic: We want Similarity
-        # MER 0.0 (Match) -> Score 1.0 (High Similarity)
-        # MER 1.0 (Diff)  -> Score 0.0 (Low Similarity)
-        for idx, val in zip(valid_indices, mer_vals):
-            scores[idx] = 1.0 - val
+            # Invert: MER 0.0 (Match) -> 1.0 (High Similarity, bad for attack)
+            #         MER 1.0 (Diff)  -> 0.0 (Low Similarity, good for attack)
+            scores.append(1.0 - float(raw_mer))
 
         return scores
