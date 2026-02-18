@@ -167,7 +167,7 @@ class RunLogger:
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         plt.close()
 
-        print("[Log] Spectrograms saved successfully (using Whisper's configuration)
+        print("[Log] Spectrograms saved successfully (using Whisper's configuration)")
 
     def save_fitness_history(self, fitness_history: list[np.ndarray] = None):
         """
