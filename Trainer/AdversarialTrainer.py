@@ -96,7 +96,7 @@ class AdversarialTrainer:
                     # Calculate stats for this generation
                     # axis=0 means "down the column" (across all individuals)
                     current_means = generation_matrix.mean(axis=0)
-                    current_mins = generation_matrix.min(axis=0)
+                    current_mins = np.array([list(c.fitness) for c in optimizer.best_candidates]).min(axis=0)
 
                     # Format the string (e.g., "WER: 0.15 (Avg: 0.40) | PESQ: ...")
                     stats_parts = []
