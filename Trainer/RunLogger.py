@@ -165,8 +165,7 @@ class RunLogger:
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         plt.close()
 
-        print("[Log] Spectrograms saved successfully (using Whisper's configuration)")
-
+        print("[Log] Spectrograms saved successfully (using Whisper's configuration)
 
     def save_fitness_history(self, fitness_history: list[np.ndarray] = None):
         """
@@ -284,8 +283,7 @@ class RunLogger:
                 "text_gt": config_data.text_gt,
                 "text_target": config_data.text_target,
                 "asr_transcription": text_best,
-                "fitness_scores": dict(zip([obj.name for obj in self.active_objectives],
-                                           candidate.fitness.tolist()))
+                "fitness_scores": dict(zip([obj.name for obj in self.active_objectives], candidate.fitness.tolist()))
             },
 
             # 2. The Solution (Raw Optimization Result)
@@ -304,8 +302,9 @@ class RunLogger:
             "style_vector_prosodic": audio_embedding_best.style_vector_prosodic.cpu(),
 
             # 5. The Mixed Embeddings (The final "Adversarial" embeddings)
+            "h_text_gt": self.vector_manipulator.audio_embedding_gt.h_text.cpu(),
+            "h_text_target": self.vector_manipulator.h_text_target.cpu(),
             "h_text_mixed": audio_embedding_best.h_text.cpu(),
-            "h_bert_mixed": audio_embedding_best.h_bert.cpu()
         }
 
         save_path = os.path.join(self.folder_path, "reconstruction_pack.pt")
