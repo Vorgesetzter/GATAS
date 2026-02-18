@@ -109,7 +109,7 @@ def main():
         fitness_data, generation_count, elapsed_time_total = trainer.run_full_iteration(optimizer, config_data.num_generations, config_data.pop_size, config_data.batch_size)
 
         # 5. Save all results (audios, spectrograms, graphs, etc.)
-        folder_path, text_best, best_candidate, audio_best = logger.save_all_results(
+        logger.save_all_results(
             optimizer, fitness_data, generation_count, elapsed_time_total,
             audio_gt, audio_target, config_data
         )

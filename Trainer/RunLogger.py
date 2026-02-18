@@ -327,8 +327,7 @@ class RunLogger:
             "text_target": config_data.text_target,
             "asr_transcription": text_best,
             "objectives": [obj.name for obj in self.active_objectives],
-            "fitness_scores": dict(zip([obj.name for obj in self.active_objectives],
-                                       candidate.fitness.tolist())),
+            "fitness_scores": dict(zip([obj.name for obj in self.active_objectives], candidate.fitness.tolist())),
             "best_candidate_generation": getattr(candidate, 'generation', None),
             "generation_count": generation_count,
             "elapsed_time_seconds": round(elapsed_time_total, 2),
@@ -341,6 +340,11 @@ class RunLogger:
             "hardware": gpu_info,
             "os": f"{platform.system()} {platform.release()}",
             "cpu": platform.processor(),
+            "success": all(
+                candidate.fitness[i] <= config_data.thresholds.get(obj, float('inf'))
+                for i, obj in enumerate(self.active_objectives)
+                if obj in config_data.thresholds
+            ),
         }
 
         save_path = os.path.join(self.folder_path, "run_summary.json")
@@ -478,6 +482,5 @@ class RunLogger:
         graph_plotter.generate_minimal_population_graph()
         plt.close('all')
 
-        return folder_path, text_best, best_candidate, audio_best
 
 
