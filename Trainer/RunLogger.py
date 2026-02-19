@@ -206,49 +206,61 @@ class RunLogger:
             raise ValueError("Candidate list is empty.")
 
         f = np.array([c.fitness for c in candidates])
-
         print(f"\n[Log] Candidates on Pareto Front: {len(candidates)}")
 
-        # 1. Threshold filtering
-        satisfied_mask = np.ones(len(candidates), dtype=bool)
+        # Detect zero thresholds — these cannot be used as a normalization scale (div/0).
+        has_zero_threshold = thresholds and any(
+            thresholds[obj] == 0.0
+            for obj in self.active_objectives
+            if obj in thresholds
+        )
 
-        if thresholds:
-            for i, obj in enumerate(self.active_objectives):
-                if obj in thresholds:
-                    limit = thresholds[obj]
-                    satisfied_mask &= (f[:, i] <= limit)
-
-        # 2. Logic: If some satisfy thresholds, only pick from those.
-        # Otherwise, pick from everyone (fallback).
-        if np.any(satisfied_mask):
-            final_indices = np.where(satisfied_mask)[0]
-            final_fitness = f[satisfied_mask]
-            print(f"[Log] Using {len(final_indices)} candidate(s) that meet all thresholds")
-        else:
+        # --- Strategy A: No thresholds, or a zero threshold is present ---
+        # Fall back to [min, max] normalization. If a zero threshold exists, try to filter
+        # to candidates that meet all thresholds first; if none qualify, use all candidates.
+        if not thresholds or has_zero_threshold:
             final_indices = np.arange(len(candidates))
             final_fitness = f
-            print(f"[Log] No candidate met thresholds. Preceding with all candidates.")
 
-        # --- 3. Knee Point Selection (Balance) ---
-        # Normalize to [0,1] range so large metrics (like PESQ) don't dominate small ones (like WER)
-        mins = final_fitness.min(axis=0)
-        maxs = final_fitness.max(axis=0)
-        ranges = maxs - mins
+            if has_zero_threshold:
+                satisfied_mask = np.ones(len(candidates), dtype=bool)
+                for i, obj in enumerate(self.active_objectives):
+                    if obj in thresholds:
+                        satisfied_mask &= (f[:, i] <= thresholds[obj])
+                if np.any(satisfied_mask):
+                    final_indices = np.where(satisfied_mask)[0]
+                    final_fitness = f[satisfied_mask]
+                    print(f"[Log] Zero threshold present. Restricted to {len(final_indices)} candidate(s) meeting all thresholds.")
+                else:
+                    print(f"[Log] Zero threshold present, no candidate meets it. Using all candidates.")
 
-        ranges[ranges == 0] = 1.0  # Avoid divide by zero
+            mins = final_fitness.min(axis=0)
+            maxs = final_fitness.max(axis=0)
+            ranges = maxs - mins
+            ranges[ranges == 0] = 1.0
+            normalized_fitness = (final_fitness - mins) / ranges
+            distances = np.linalg.norm(normalized_fitness, axis=1)
+            best_local_idx = np.argmin(distances)
+            selected = candidates[final_indices[best_local_idx]]
+            print(f"[Log] Selection: [min,max] knee point")
+            print(f"[Log] Selected Candidate Fitness: {selected.fitness.tolist()}")
+            return selected
 
-        normalized_fitness = (final_fitness - mins) / ranges
-
-        # Calculate Euclidean distance to the ideal point (0,0,0)
+        # --- Strategy B: All thresholds > 0 → threshold-normalized knee point ---
+        # No filtering. Normalize every candidate by threshold (threshold → 1.0).
+        # Tighter thresholds get proportionally higher weight: scale = 1/threshold.
+        # e.g. PESQ threshold 0.4 → weight 2.5x; WHISPER_PROB_GT threshold 0.01 → weight 100x.
+        # Objectives without a threshold use observed max as scale.
+        scale = np.array([
+            thresholds[obj] if obj in thresholds else (f[:, i].max() or 1.0)
+            for i, obj in enumerate(self.active_objectives)
+        ])
+        normalized_fitness = f / scale
         distances = np.linalg.norm(normalized_fitness, axis=1)
-
-        # Retrieve the original candidate object
-        best_local_idx = np.argmin(distances)
-        best_global_idx = final_indices[best_local_idx]
-        selected = candidates[best_global_idx]
-
+        best_idx = np.argmin(distances)
+        selected = candidates[best_idx]
+        print(f"[Log] Selection: threshold-normalized knee point (scale={scale.tolist()})")
         print(f"[Log] Selected Candidate Fitness: {selected.fitness.tolist()}")
-
         return selected
 
     def run_final_inference(self, best_candidate):
@@ -394,7 +406,7 @@ class RunLogger:
             f.write(f"Efficiency:        {avg_per_gen:.2f}s per generation\n")
 
             f.write("\n--- [4] BEST CANDIDATE RESULTS ---\n")
-            f.write(f"Selection Metric:  Euclidean Distance to Origin (Knee Point)\n")
+            f.write(f"Selection Metric:  Threshold-Normalized Knee Point (scale = 1/threshold per objective)\n")
             f.write(f"Generation Found:  {getattr(candidate, 'generation', 'Unknown')}\n")
             f.write("-" * 30 + "\n")
 
