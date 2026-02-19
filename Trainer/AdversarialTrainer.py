@@ -189,18 +189,13 @@ class AdversarialTrainer:
         end_time = time.time()
 
         # 4. Collect scores and check early stopping (vectorized)
-        # Create garbage mask for samples with invalid ASR output
         batch_scores_list = []
-
-        # Garbage Mask against silence trap
-        garbage_mask = np.array([len(t) < 2 for t in asr_texts], dtype=bool)
 
         # Build score matrix: [batch_size, num_objectives]
         score_matrix = np.zeros((current_batch_size, len(self.objectives)), dtype=np.float32)
 
         for obj_idx, obj in enumerate(self.objectives):
             scores = np.array(batch_scores_dict[obj], dtype=np.float32)
-            scores[garbage_mask] = 1.0  # Penalize garbage samples
 
             # Store in matrix for check
             score_matrix[:, obj_idx] = scores
