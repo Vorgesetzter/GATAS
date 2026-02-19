@@ -10,8 +10,10 @@ Usage:
     python adversarial_tts.py --ground_truth_text "Hello world" --target_text "Goodbye"
 """
 
-import torch
 import os
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"  # Must be set before cuBLAS initializes for deterministic matmuls
+
+import torch
 import argparse
 from Datastructures.enum import AttackMode
 from Objectives.FitnessObjective import FitnessObjective
