@@ -206,29 +206,43 @@ class RunLogger:
             raise ValueError("Candidate list is empty.")
 
         f = np.array([c.fitness for c in candidates])
+        indices = np.arange(len(candidates))
         print(f"\n[Log] Candidates on Pareto Front: {len(candidates)}")
 
-        # Pre-scale dimensions that have a positive threshold (threshold → 1.0).
-        # Zero thresholds are skipped (avoid div/0); [min,max] below handles them.
-        working_f = f.copy().astype(np.float64)
+        # Step 1: Restrict to candidates that meet all thresholds (if any do).
+        # Without this filter, a candidate with near-zero value on one objective but
+        # violating the other threshold can win via [min,max] range distortion.
         if thresholds:
-            scaled = []
+            meets_all = np.ones(len(candidates), dtype=bool)
             for i, obj in enumerate(self.active_objectives):
-                if obj in thresholds and thresholds[obj] > 0.0:
-                    working_f[:, i] /= thresholds[obj]
-                    scaled.append(f"{obj.name}÷{thresholds[obj]}")
-            if scaled:
-                print(f"[Log] Pre-scaled: {', '.join(scaled)}")
+                if obj in thresholds:
+                    meets_all &= (f[:, i] <= thresholds[obj])
+            if np.any(meets_all):
+                print(f"[Log] {np.sum(meets_all)} candidate(s) meet all thresholds — restricting selection.")
+                indices = indices[meets_all]
+                f = f[meets_all]
+            else:
+                print(f"[Log] No candidate meets all thresholds — using full Pareto front.")
 
-        # [min, max] knee point on the (possibly pre-scaled) values
-        mins = working_f.min(axis=0)
-        maxs = working_f.max(axis=0)
-        ranges = maxs - mins
-        ranges[ranges == 0] = 1.0
-        normalized_fitness = (working_f - mins) / ranges
-        distances = np.linalg.norm(normalized_fitness, axis=1)
-        best_idx = np.argmin(distances)
-        selected = candidates[best_idx]
+        # Step 2: Scale each objective dimension.
+        # Positive threshold → divide by threshold (threshold maps to 1.0, giving it
+        # proportional weight: tighter threshold = higher weight).
+        # Zero/missing threshold → divide by observed max (normalises to [0, 1]).
+        working_f = f.copy().astype(np.float64)
+        for i, obj in enumerate(self.active_objectives):
+            t = thresholds.get(obj, 0.0) if thresholds else 0.0
+            if t > 0.0:
+                working_f[:, i] /= t
+            else:
+                col_max = working_f[:, i].max()
+                working_f[:, i] /= col_max if col_max > 0 else 1.0
+
+        # Step 3: Pick the candidate closest to the origin.
+        # No [min,max] re-normalisation here — that step would be distorted by
+        # extreme Pareto corners (e.g. IV≈0 solutions) and undo the threshold scaling.
+        distances = np.linalg.norm(working_f, axis=1)
+        best_local_idx = np.argmin(distances)
+        selected = candidates[indices[best_local_idx]]
         print(f"[Log] Selected Candidate Fitness: {selected.fitness.tolist()}")
         return selected
 
