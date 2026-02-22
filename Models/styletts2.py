@@ -198,26 +198,36 @@ class StyleTTS2:
 
     @torch.no_grad()
     def inference_on_embedding(self, audio_embedding_data: AudioEmbeddingData) -> Tensor:
+        # Force deterministic CUDA kernels (cuDNN LSTM and ConvTranspose1d are
+        # non-deterministic by default).  Without this, the same interpolation
+        # vector can produce slightly different waveforms across calls, which is
+        # enough to flip Whisper's argmax on borderline adversarial audio.
+        prev_deterministic = torch.are_deterministic_algorithms_enabled()
+        torch.use_deterministic_algorithms(True, warn_only=False)
 
-        h_bert_with_style = self.model.predictor.text_encoder(audio_embedding_data.h_bert, audio_embedding_data.style_vector_acoustic, audio_embedding_data.input_length, audio_embedding_data.text_mask)
+        try:
+            h_bert_with_style = self.model.predictor.text_encoder(audio_embedding_data.h_bert, audio_embedding_data.style_vector_acoustic, audio_embedding_data.input_length, audio_embedding_data.text_mask)
 
-        a_pred = self._predict_duration(h_bert_with_style, audio_embedding_data.input_length)
-        a_pred = a_pred.to(self.device)
+            a_pred = self._predict_duration(h_bert_with_style, audio_embedding_data.input_length)
+            a_pred = a_pred.to(self.device)
 
-        h_aligned = audio_embedding_data.h_text @ a_pred
+            h_aligned = audio_embedding_data.h_text @ a_pred
 
-        h_bert_with_style_per_frame = h_bert_with_style.transpose(-1, -2) @ a_pred
+            h_bert_with_style_per_frame = h_bert_with_style.transpose(-1, -2) @ a_pred
 
-        f0_pred, n_pred = self.model.predictor.F0Ntrain(h_bert_with_style_per_frame, audio_embedding_data.style_vector_acoustic)
+            f0_pred, n_pred = self.model.predictor.F0Ntrain(h_bert_with_style_per_frame, audio_embedding_data.style_vector_acoustic)
 
-        out = self.model.decoder(
-            h_aligned,
-            f0_pred,
-            n_pred,
-            audio_embedding_data.style_vector_prosodic
-        )
+            out = self.model.decoder(
+                h_aligned,
+                f0_pred,
+                n_pred,
+                audio_embedding_data.style_vector_prosodic
+            )
 
-        return out.squeeze(1)
+            return out.squeeze(1)
+
+        finally:
+            torch.use_deterministic_algorithms(prev_deterministic)
 
     @torch.no_grad()
     def inference(self, text: str, noise: Tensor, embedding_scale=1, diffusion_steps=5):
