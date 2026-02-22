@@ -195,10 +195,10 @@ class AdversarialTrainer:
         batch_scores_list = []
 
         # Build score matrix: [batch_size, num_objectives]
-        score_matrix = np.zeros((current_batch_size, len(self.objectives)), dtype=np.float32)
+        score_matrix = np.zeros((current_batch_size, len(self.objectives)), dtype=np.float64)
 
         for obj_idx, obj in enumerate(self.objectives):
-            scores = np.array(batch_scores_dict[obj], dtype=np.float32)
+            scores = np.array(batch_scores_dict[obj], dtype=np.float64)
 
             # Store in matrix for check
             score_matrix[:, obj_idx] = scores
