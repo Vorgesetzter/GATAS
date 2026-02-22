@@ -271,7 +271,11 @@ class RunLogger:
         else:
             asr_model = self.asr_model
 
-        asr_texts, _ = asr_model.inference(audio_best)
+        # Expand to the same batch size used during optimization so Whisper selects
+        # the same cuBLAS GEMM kernel path as when the fitness score was computed.
+        batch_size = self.vector_manipulator.config_data.batch_size
+        audio_for_whisper = audio_best.expand(batch_size, -1).contiguous()
+        asr_texts, _ = asr_model.inference(audio_for_whisper)
         asr_text = asr_texts[0] if isinstance(asr_texts, list) else asr_texts
 
         return audio_best, asr_text, audio_embedding_data
