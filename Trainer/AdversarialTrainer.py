@@ -79,10 +79,10 @@ class AdversarialTrainer:
 
                 for gen in pbar:
                     # --- Existing Logic ---
-                    fitness_score_per_objective, stop_optimization, elapsed_time = self.run_one_generation(optimizer, pop_size, batch_size)
+                    fitness_score_per_objective, stop_optimization, elapsed_time, audio_per_individual = self.run_one_generation(optimizer, pop_size, batch_size)
                     fitness_arrays = [np.array(scores) for scores in fitness_score_per_objective]
 
-                    optimizer.assign_fitness(fitness_arrays)
+                    optimizer.assign_fitness(fitness_arrays, audio_per_individual)
                     optimizer.update()
 
                     generation_matrix = np.column_stack(fitness_arrays)
@@ -122,20 +122,21 @@ class AdversarialTrainer:
 
         return fitness_history, archive_history, gen+1, elapsed_time_total
 
-    def run_one_generation(self, optimizer, pop_size, batch_size) -> tuple[list[list[float]], bool, float]:
+    def run_one_generation(self, optimizer, pop_size, batch_size) -> tuple[list[list[float]], bool, float, list]:
 
         stop_optimization = False
         total_elapsed_time = 0
 
         # Create list to store scores for this generation
         fitness_per_objective: list[list[float]] = [[] for _ in self.objectives]
+        audio_per_individual: list = []
 
         # Get current population from optimizer
         interpolation_vectors_full = torch.from_numpy(optimizer.get_x_current()).to(self.device).float()
 
         # Process batches
         for batch_idx in range(0, pop_size, batch_size):
-            batch_stop, batch_fitness_per_objective, elapsed_time = self._process_batch(
+            batch_stop, batch_fitness_per_objective, elapsed_time, batch_audio = self._process_batch(
                 batch_idx,
                 batch_size,
                 interpolation_vectors_full,
@@ -145,16 +146,18 @@ class AdversarialTrainer:
             for obj_idx, score in enumerate(batch_fitness_per_objective):
                 fitness_per_objective[obj_idx].extend(score)
 
+            audio_per_individual.extend(batch_audio)
+
             if batch_stop:
                 stop_optimization = True
 
-        return fitness_per_objective, stop_optimization, total_elapsed_time
+        return fitness_per_objective, stop_optimization, total_elapsed_time, audio_per_individual
 
     # =========================================================================
     # Helper Methods
     # =========================================================================
 
-    def _process_batch(self, batch_idx: int, batch_size: int, interpolation_vectors_full: torch.Tensor) -> tuple[bool, list[list[float]], float]:
+    def _process_batch(self, batch_idx: int, batch_size: int, interpolation_vectors_full: torch.Tensor) -> tuple[bool, list[list[float]], float, list]:
         """
         Returns:
             stop_optimization (bool): True if early stopping met.
@@ -207,7 +210,12 @@ class AdversarialTrainer:
         stop_optimization = self._check_early_stopping_batch(score_matrix)
         elapsed_time = end_time - start_time
 
-        return stop_optimization, batch_scores_list, elapsed_time
+        # Store each individual's audio on CPU so it can be retrieved later without
+        # re-synthesis (re-synthesis is non-deterministic due to cumsum_cuda and other
+        # CUDA ops, which can flip Whisper's output on borderline adversarial audio).
+        audio_list = [audio_mixed_batch[i].detach().cpu() for i in range(current_batch_size)]
+
+        return stop_optimization, batch_scores_list, elapsed_time, audio_list
 
     def _check_early_stopping_batch(self, score_matrix: np.ndarray) -> bool:
         """

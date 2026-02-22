@@ -249,35 +249,29 @@ class RunLogger:
         return selected
 
     def run_final_inference(self, best_candidate):
-        # Reshape solution to original optimizer shape [1, input_length, size_per_phoneme]
+        # Reconstruct the embedding for save_torch_state (lightweight — no synthesis).
         input_length = int(self.vector_manipulator.audio_embedding_gt.input_length.detach().cpu().item())
         size_per_phoneme = self.vector_manipulator.config_data.size_per_phoneme
-        batch_size = self.vector_manipulator.config_data.batch_size
 
         interpolation_vector = torch.as_tensor(
             best_candidate.solution, dtype=torch.float32
         ).view(1, input_length, size_per_phoneme).to(self.device)
-
-        # Expand to batch_size for TTS so the decoder GEMM kernel path matches what was
-        # used during optimization.  Both StyleTTS2 and Whisper select cuBLAS kernels
-        # based on batch dimension — synthesising with the same batch_size here ensures
-        # bit-identical audio (and therefore a bit-identical Whisper transcription) to
-        # what was scored during the evolutionary search.
-        interpolation_vector_batch = interpolation_vector.expand(batch_size, -1, -1).contiguous()
-        _, _, audio_embedding_data_batch = self.vector_manipulator.interpolate(interpolation_vector_batch)
-        audio_batch = self.tts_model.inference_on_embedding(audio_embedding_data_batch)
-        audio_best = audio_batch[0:1]  # all copies are identical; keep [1, samples] shape
-
-        # Single-sample embedding returned for save_torch_state (same values, batch dim = 1)
         _, _, audio_embedding_data = self.vector_manipulator.interpolate(interpolation_vector)
+
+        # Use the audio that was stored during optimization rather than re-synthesising.
+        # Re-synthesis is non-deterministic (cumsum_cuda, cuDNN LSTM, ConvTranspose1d)
+        # and can produce different waveforms across calls, which on borderline
+        # adversarial audio causes Whisper to return a different transcription from the
+        # one that corresponds to the stored fitness score.
+        stored_audio = best_candidate.data[0]  # CPU tensor [samples], shape from _process_batch
+        audio_best = stored_audio.unsqueeze(0).to(self.device)  # [1, samples]
 
         if isinstance(self.asr_model, torch.nn.DataParallel):
             asr_model = self.asr_model.module
         else:
             asr_model = self.asr_model
 
-        # Run Whisper on the full batch so its GEMM path also matches optimization.
-        asr_texts, _ = asr_model.inference(audio_batch)
+        asr_texts, _ = asr_model.inference(audio_best)
         asr_text = asr_texts[0] if isinstance(asr_texts, list) else asr_texts
 
         return audio_best, asr_text, audio_embedding_data
