@@ -76,15 +76,18 @@ def _adjust_interpolation_vector(interpolation_vector: Tensor, matrix: Tensor, s
 
 def generate_similar_noise(reference_tensor):
     """
-    Generates random noise that matches the mean and standard deviation
-    of the reference tensor.
+    Generates random noise matching per-feature mean and std of the reference tensor.
+    For 3D tensors (batch, seq, features): computes stats across batch and sequence dims.
+    For lower-dim tensors: falls back to global stats.
     """
-    mu = reference_tensor.mean()
-    std = reference_tensor.std()
-
-    # Create standard gaussian noise, then scale and shift it
-    noise = torch.randn_like(reference_tensor) * std + mu
-    return noise
+    if reference_tensor.dim() >= 3:
+        dims = tuple(range(reference_tensor.dim() - 1))
+        mu = reference_tensor.mean(dim=dims, keepdim=True)
+        std = reference_tensor.std(dim=dims, keepdim=True).clamp(min=1e-6)
+    else:
+        mu = reference_tensor.mean()
+        std = reference_tensor.std().clamp(min=1e-6)
+    return torch.randn_like(reference_tensor) * std + mu
 
 class VectorManipulator:
     """
