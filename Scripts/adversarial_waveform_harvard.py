@@ -253,14 +253,16 @@ def main():
                 )
 
                 trainer = WaveformAdversarialTrainer(
-                    tts_model, asr_model, config_data.thresholds, objectives_dict, audio_gt, device
+                    tts_model, asr_model, config_data.thresholds, objectives_dict, audio_gt, device,
+                    mode=config_data.mode, target_audio=audio_target,
                 )
                 logger = RunLogger(
                     config_data.active_objectives, tts_model, asr_model, None, device
                 )
 
+                waveform_bounds = (0, 1) if args.mode == "TARGETED" else (-args.noise_scale, args.noise_scale)
                 optimizer = PymooOptimizer(
-                    bounds=(-args.noise_scale, args.noise_scale),
+                    bounds=waveform_bounds,
                     algorithm=NSGA2,
                     algo_params={"pop_size": args.pop_size},
                     num_objectives=len(config_data.active_objectives),
