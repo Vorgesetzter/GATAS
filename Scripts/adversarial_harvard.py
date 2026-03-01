@@ -183,7 +183,7 @@ def initialize_parser():
     parser.add_argument("--iv_scalar", type=float, default=0.5)
     parser.add_argument("--size_per_phoneme", type=int, default=1)
     parser.add_argument("--subspace_optimization", action="store_true")
-    parser.add_argument("--num_rms_candidates", type=int, default=20)
+    parser.add_argument("--num_rms_candidates", type=int, default=1)
     parser.add_argument("--seed_target", action="store_true", default=False)
     # Waveform method
     parser.add_argument("--noise_scale", type=float, default=0.05)
