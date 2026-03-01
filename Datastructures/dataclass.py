@@ -31,6 +31,9 @@ class ConfigData:
     subspace_optimization: bool
     random_matrix: torch.Tensor
 
+    # --- Target Selection ---
+    num_rms_candidates: int = 20
+
     def print_summary(self):
         """Prints the formatted configuration to console."""
         print("=== Configuration ===")
