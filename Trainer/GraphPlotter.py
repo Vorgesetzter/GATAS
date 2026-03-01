@@ -150,7 +150,6 @@ class GraphPlotter:
             ax.set_title(f"Objective: {obj.name}", fontsize=14)
             ax.set_ylabel("Fitness Score")
             ax.grid(True, alpha=0.3)
-            ax.legend()
 
         plt.xlabel("Generation")
         plt.tight_layout(rect=(0, 0.03, 1, 0.95))
@@ -188,7 +187,6 @@ class GraphPlotter:
             ax.set_title(f"Objective: {obj.name}", fontsize=14)
             ax.set_ylabel("Min Fitness Score")
             ax.grid(True, linestyle=':', alpha=0.6)
-            ax.legend(loc='upper right')
 
         plt.xlabel("Generation")
         plt.tight_layout(rect=(0, 0.03, 1, 0.95))
