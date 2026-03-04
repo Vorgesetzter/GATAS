@@ -16,6 +16,7 @@ os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 import signal
 import argparse
 import datetime
+import numpy as np
 import torch
 import nltk
 
@@ -163,8 +164,14 @@ def upload_folder_to_gcs(local_folder: str, bucket_name: str, gcs_prefix: str):
 
 def initialize_parser():
     parser = argparse.ArgumentParser(description="Adversarial TTS — Harvard Sentences")
-    parser.add_argument("--harvard_sentences_start", type=int, default=1)
-    parser.add_argument("--harvard_sentences_end", type=int, default=10)
+    parser.add_argument("--sentence_start", type=int, default=1,
+                        help="Start position (1-indexed) in the randomly sampled sentence list")
+    parser.add_argument("--sentence_end", type=int, default=5,
+                        help="End position (1-indexed) in the randomly sampled sentence list")
+    parser.add_argument("--sample_size", type=int, default=20,
+                        help="Total number of sentences to sample from 1–100")
+    parser.add_argument("--sample_seed", type=int, default=42,
+                        help="Random seed for sentence sampling")
     parser.add_argument("--loop_count", type=int, default=2)
     parser.add_argument("--num_generations", type=int, default=100)
     parser.add_argument("--pop_size", type=int, default=200)
@@ -195,11 +202,15 @@ def main():
     tts_model, asr_model = loader.load_required_models()
     print("Models loaded.")
 
+    sampled_ids = sorted(np.random.default_rng(args.sample_seed).choice(100, size=args.sample_size, replace=False) + 1)
+    sentence_ids = sampled_ids[args.sentence_start - 1 : args.sentence_end]
+
     run_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
     print(f"Run timestamp: {run_timestamp}")
     print(f"{'='*60}")
     print(f"  mode:               {args.mode}")
-    print(f"  sentences:          {args.harvard_sentences_start} → {args.harvard_sentences_end}")
+    print(f"  sample seed:        {args.sample_seed}  (sample size: {args.sample_size})")
+    print(f"  sentence positions: {args.sentence_start} → {args.sentence_end}  →  IDs: {sentence_ids}")
     print(f"  runs per sentence:  {args.loop_count}")
     print(f"  generations:        {args.num_generations}")
     print(f"  pop_size:           {args.pop_size}")
@@ -211,7 +222,7 @@ def main():
     all_summaries = []
 
     try:
-        for sentence_id in range(args.harvard_sentences_start, args.harvard_sentences_end + 1):
+        for sentence_id in sentence_ids:
             sentence_text = HARVARD_SENTENCES[sentence_id - 1]
             target_text = args.target_text if args.target_text else HARVARD_SENTENCES[sentence_id % len(HARVARD_SENTENCES)]
             print(f"\n{'='*60}")

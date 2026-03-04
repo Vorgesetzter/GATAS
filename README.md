@@ -30,7 +30,7 @@ python Scripts/adversarial_tts.py [OPTIONS]
 ```
 
 ### Jupyter Notebooks
-- Local notebook: [Scripts/adversarial_tts_classes.ipynb](Scripts/adversarial_tts.ipynb)
+- Local notebook: [Scripts/adversarial_tts_classes.ipynb](Scripts/Adversarial/adversarial_tts.ipynb)
 - Google Colab: [Scripts/adversarial_tts_classes_colab.ipynb](Scripts/adversarial_tts_colab_old.ipynb)
 
 

@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 
 from Trainer import VectorManipulator
 
-os.chdir("..") # Since we are in Scripts Folder
+os.chdir("../..") # Since we are in Scripts Folder
 
 # Import class-based modules
 from Trainer.EnvironmentLoader import EnvironmentLoader
