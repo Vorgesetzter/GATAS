@@ -181,6 +181,7 @@ def initialize_parser():
     parser.add_argument("--target_text", type=str, default="")
     parser.add_argument("--objectives", type=str, default="PESQ=0.2, SET_OVERLAP=0.5")
     parser.add_argument("--seed_target", action="store_true", default=False)
+    parser.add_argument("--seed_gt", action="store_true", default=False)
     parser.add_argument("--min_generations", type=int, default=0)
     parser.add_argument("--save_spectrograms", action="store_true", default=True)
     parser.add_argument("--save_graphs", action="store_true", default=True)
@@ -287,10 +288,13 @@ def main():
                     ),
                 )
 
-                if args.seed_target:
+                if args.seed_target or args.seed_gt:
                     n_var = audio_gt.shape[-1]
                     initial_pop = np.random.uniform(waveform_bounds[0], waveform_bounds[1], (args.pop_size, n_var))
-                    initial_pop[0] = waveform_bounds[1]  # max perturbation anchor → SET_OVERLAP = 0
+                    if args.seed_target:
+                        initial_pop[0] = waveform_bounds[1]  # Anchor: pure target → SET_OVERLAP = 0
+                    if args.seed_gt:
+                        initial_pop[1] = waveform_bounds[0]  # Anchor: pure GT → PESQ ≈ 0
                     optimizer.update_problem((n_var,), sampling=initial_pop)
 
                 fitness_data, archive_data, generation_count, elapsed_time_total, interrupted, generation_found = trainer.run_full_iteration(optimizer, args.num_generations, args.pop_size, args.batch_size, min_generations=args.min_generations)
@@ -315,7 +319,7 @@ def main():
                         save_spectrograms=args.save_spectrograms,
                         save_graphs=args.save_graphs,
                         seed_target=args.seed_target,
-                        seed_gt=False,
+                        seed_gt=args.seed_gt,
                         min_generations=args.min_generations,
                         gt_rms=gt_rms,
                         target_rms=target_rms,
