@@ -276,7 +276,7 @@ def main():
                     config_data.active_objectives, tts_model, asr_model, None, device
                 )
 
-                waveform_bounds = (0, 1) if args.mode == "TARGETED" else (-args.noise_scale, args.noise_scale)
+                waveform_bounds = (0, 1)
                 optimizer = PymooOptimizer(
                     bounds=waveform_bounds,
                     algorithm=NSGA2,

@@ -2,12 +2,10 @@
 WaveformAdversarialTrainer - Waveform-space variant of AdversarialTrainer.
 
 Supports two attack modes:
-  - TARGETED: interpolates between audio_gt and audio_target waveforms
+  - TARGETED / NOISE_UNTARGETED: interpolates between audio_gt and audio_target waveforms
       audio_mixed = (1 - alpha) * audio_gt + alpha * audio_target
       optimizer bounds: (0, 1)
-  - All other modes (NOISE_UNTARGETED etc.): additive perturbation
-      audio_mixed = audio_gt + delta
-      optimizer bounds: (-noise_scale, noise_scale)
+      IV=0 → pure GT, IV=1 → pure target (SET_OVERLAP=0)
 
 All other optimization logic (NSGA-II, scoring, early stopping, logging) is inherited.
 """
@@ -62,15 +60,12 @@ class WaveformAdversarialTrainer(AdversarialTrainer):
         batch = interpolation_vectors_full[batch_idx: batch_idx + batch_size]
         current_batch_size = batch.shape[0]
 
-        if self.mode is AttackMode.TARGETED and self.target_audio is not None:
-            # Interpolate between original and target waveforms
-            audio_mixed_batch = (
-                (1.0 - batch) * self.original_audio.expand(current_batch_size, -1)
-                + batch * self.target_audio.expand(current_batch_size, -1)
-            )
-        else:
-            # Additive perturbation
-            audio_mixed_batch = self.original_audio.expand(current_batch_size, -1) + batch
+        # Interpolate between original and target waveforms for all modes
+        # IV=0 → pure GT, IV=1 → pure target (SET_OVERLAP=0)
+        audio_mixed_batch = (
+            (1.0 - batch) * self.original_audio.expand(current_batch_size, -1)
+            + batch * self.target_audio.expand(current_batch_size, -1)
+        )
 
         audio_mixed_batch = audio_mixed_batch.clamp(-1.0, 1.0)
 
