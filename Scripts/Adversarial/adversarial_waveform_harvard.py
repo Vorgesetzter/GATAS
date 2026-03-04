@@ -293,8 +293,7 @@ def main():
                     initial_pop[0] = waveform_bounds[1]  # max perturbation anchor → SET_OVERLAP = 0
                     optimizer.update_problem((n_var,), sampling=initial_pop)
 
-                fitness_data, archive_data, generation_count, elapsed_time_total, interrupted = \
-                    trainer.run_full_iteration(optimizer, args.num_generations, args.pop_size, args.batch_size, min_generations=args.min_generations)
+                fitness_data, archive_data, generation_count, elapsed_time_total, interrupted, generation_found = trainer.run_full_iteration(optimizer, args.num_generations, args.pop_size, args.batch_size, min_generations=args.min_generations)
 
                 if fitness_data:
                     folder_path = logger.setup_multi_sentence_directory(sentence_id, run_id, run_timestamp)
@@ -312,6 +311,7 @@ def main():
                         run_id=run_id,
                         run_timestamp=run_timestamp,
                         num_generations=args.num_generations,
+                        generation_found=generation_found,
                         save_spectrograms=args.save_spectrograms,
                         save_graphs=args.save_graphs,
                         seed_target=args.seed_target,

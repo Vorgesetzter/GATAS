@@ -62,12 +62,13 @@ class AdversarialTrainer:
                              is allowed, even if thresholds are met earlier.
 
         Returns:
-            tuple: (fitness_history, archive_history, generations_run, total_inference_time, interrupted)
+            tuple: (fitness_history, archive_history, generations_run, total_inference_time, interrupted, generation_found)
                 - fitness_history: List of matrices (one per generation)
                 - archive_history: List of Pareto archive snapshots (one per generation)
                 - generations_run: Integer count of generations completed
                 - total_inference_time: Float seconds
                 - interrupted: True if stopped early via Ctrl+C
+                - generation_found: First generation where all thresholds were met, or None
         """
 
         fitness_history = []
