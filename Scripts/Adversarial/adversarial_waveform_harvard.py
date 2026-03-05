@@ -206,7 +206,7 @@ def main():
     print("Models loaded.")
 
     sampled_ids = sorted(np.random.default_rng(args.sample_seed).choice(100, size=args.sample_size, replace=False) + 1)
-    sentence_ids = sampled_ids[args.sentence_start - 1 : args.sentence_end]
+    sentence_ids = [int(i) for i in sampled_ids[args.sentence_start - 1 : args.sentence_end]]
 
     run_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
     print(f"Run timestamp: {run_timestamp}")
