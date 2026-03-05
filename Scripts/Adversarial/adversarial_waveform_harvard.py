@@ -295,7 +295,7 @@ def main():
                     if args.seed_target:
                         initial_pop[1] = waveform_bounds[1]  # Anchor: pure target → SET_OVERLAP = 0
                     if args.seed_gt:
-                        initial_pop[0] = 0.1  # Anchor: pure GT → PESQ ≈ 0
+                        initial_pop[0] = waveform_bounds[0]  # Anchor: pure GT → PESQ ≈ 0
                     optimizer.update_problem((n_var,), sampling=initial_pop)
 
                 fitness_data, archive_data, generation_count, elapsed_time_total, interrupted, generation_found = trainer.run_full_iteration(optimizer, args.num_generations, args.pop_size, args.batch_size, min_generations=args.min_generations)
