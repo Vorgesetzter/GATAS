@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Evaluation Survey</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; line-height: 1.6; background-color: #f9f9f9; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: none; }
+        .active { display: block; }
+        audio { width: 100%; margin: 20px 0; }
+        textarea { width: 100%; height: 80px; margin: 10px 0; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        .mos-scale { display: flex; justify-content: space-between; margin: 20px 0; padding: 0; list-style: none; }
+        .mos-option { text-align: center; flex: 1; }
+        .mos-option input { display: none; }
+        .mos-option label { display: block; padding: 10px; margin: 2px; background: #eee; border-radius: 4px; cursor: pointer; transition: 0.3s; font-weight: bold; }
+        .mos-option input:checked + label { background: #007bff; color: white; }
+        .legend { font-size: 0.85em; color: #666; margin-top: 5px; }
+        button { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 16px; float: right; }
+        button:disabled { background: #ccc; }
+        .progress { font-size: 0.9em; color: #888; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="survey-container">
+    <div class="progress">Step <span id="current-step">1</span> of 10</div>
+    <div id="question-card" class="card active">
+        <audio id="audio-player" controls controlsList="nodownload"></audio>
+
+        <p><strong>Write down what you think the audio says.</strong><br>
+        <small>If you can't detect anything leave it empty</small></p>
+        <textarea id="transcription" placeholder="Type here..."></textarea>
+
+        <p><strong>Rate the quality of this audio:</strong></p>
+        <div class="mos-scale">
+            <div class="mos-option"><input type="radio" name="mos" id="m1" value="1"><label for="m1">1</label><div class="legend">Bad</div></div>
+            <div class="mos-option"><input type="radio" name="mos" id="m2" value="2"><label for="m2">2</label><div class="legend">Poor</div></div>
+            <div class="mos-option"><input type="radio" name="mos" id="m3" value="3"><label for="m3">3</label><div class="legend">Fair</div></div>
+            <div class="mos-option"><input type="radio" name="mos" id="m4" value="4"><label for="m4">4</label><div class="legend">Good</div></div>
+            <div class="mos-option"><input type="radio" name="mos" id="m5" value="5"><label for="m5">5</label><div class="legend">Excellent</div></div>
+        </div>
+
+        <button id="next-btn" onclick="nextQuestion()">Next</button>
+    </div>
+</div>
+
+<script>
+    // 1. LIST ALL 40 FILENAMES HERE
+    const allAudios = [
+        "sentence01_run01.wav", "sentence02_run01.wav", "sentence03_run01.wav", // ... add all 40
+    ];
+
+    // 2. CONFIG: Your GitHub Base URL (Raw)
+    const baseURL = "https://raw.githubusercontent.com/Vorgesetzter/StyleTTS2/main/survey/TTS/Success/";
+
+    let selectedAudios = allAudios.sort(() => 0.5 - Math.random()).slice(0, 10);
+    let currentIndex = 0;
+    let results = [["Filename", "Transcription", "MOS_Score"]];
+
+    function loadQuestion() {
+        document.getElementById('current-step').innerText = currentIndex + 1;
+        document.getElementById('audio-player').src = baseURL + selectedAudios[currentIndex];
+        document.getElementById('transcription').value = "";
+        document.querySelectorAll('input[name="mos"]').forEach(rb => rb.checked = false);
+        window.scrollTo(0,0);
+    }
+
+    function nextQuestion() {
+        const transcription = document.getElementById('transcription').value;
+        const mos = document.querySelector('input[name="mos"]:checked')?.value || "0";
+
+        // Save current answer
+        results.push([selectedAudios[currentIndex], `"${transcription.replace(/"/g, '""')}"`, mos]);
+
+        currentIndex++;
+
+        if (currentIndex < 10) {
+            loadQuestion();
+        } else {
+            finishSurvey();
+        }
+    }
+
+    function finishSurvey() {
+        let csvContent = "data:text/csv;charset=utf-8," + results.map(e => e.join(",")).join("\n");
+        const encodedUri = encodeURI(csvContent);
+
+        document.getElementById('survey-container').innerHTML = `
+            <h2>Survey Complete!</h2>
+            <p>Thank you for participating. Please click the button below to download your results and send them back to the researcher.</p>
+            <a href="${encodedUri}" download="surveyed_results.csv"><button>Download surveyed.csv</button></a>
+        `;
+    }
+
+    loadQuestion();
+</script>
+
+</body>
+</html>
