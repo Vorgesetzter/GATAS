@@ -171,14 +171,10 @@
             It may match exactly, or it may be different — both are valid.</p>
         </div>
 
-        <!-- Part 1: listen + transcribe + MOS -->
+        <!-- Part 1: listen + MOS + transcribe -->
         <div id="part1-section" style="display:none;">
             <audio id="audio-player" controls controlsList="nodownload" style="width:100%;margin-bottom:8px;"></audio>
             <p class="listen-hint" id="listen-hint">Listen to the clip before continuing.</p>
-
-            <p><strong>What did you hear?</strong><br>
-            <small>Write what you heard. Leave empty if unintelligible.</small></p>
-            <textarea id="transcription" placeholder="Type here..."></textarea>
 
             <p><strong>Quality Rating (MOS):</strong></p>
             <div class="mos-scale">
@@ -188,6 +184,10 @@
                 <div class="mos-option"><input type="radio" name="mos" id="m4" value="4"><label for="m4">4</label><div class="legend">Good</div></div>
                 <div class="mos-option"><input type="radio" name="mos" id="m5" value="5"><label for="m5">5</label><div class="legend">Excellent</div></div>
             </div>
+
+            <p><strong>What did you hear?</strong><br>
+            <small>Write what you heard. Leave empty if unintelligible. Press Enter to continue.</small></p>
+            <textarea id="transcription" placeholder="Type here..."></textarea>
         </div>
 
         <!-- Part 2: show transcription, guess original -->
@@ -269,6 +269,14 @@
     }
 
     function isPart1() { return currentIndex < 10; }
+
+    // Enter in either textarea triggers Next
+    document.getElementById('transcription').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); nextQuestion(); }
+    });
+    document.getElementById('guess').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); nextQuestion(); }
+    });
 
     function startSurvey() {
         document.getElementById('intro-card').style.display = 'none';
@@ -444,7 +452,7 @@
             const gt     = `"${clip.groundTruthText.replace(/"/g, '""')}"`;
             if (i < 10) {
                 return [clip.file, clip.version, clip.sentenceId, bucket, "listen+rate",
-                        gt, "", `"${(ans.transcription || "").replace(/"/g, '""')}"`, ans.mos || "", ""];
+                        gt, `"${clip.displayText.replace(/"/g, '""')}"`, `"${(ans.transcription || "").replace(/"/g, '""')}"`, ans.mos || "", ""];
             } else {
                 return [clip.file, clip.version, clip.sentenceId, bucket, "guess",
                         gt, `"${clip.displayText.replace(/"/g, '""')}"`,
