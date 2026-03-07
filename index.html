@@ -10,8 +10,8 @@
             max-width: 600px;
             margin: 40px auto;
             padding: 20px;
-            background-color: #f7f3ef; /* Warm parchment */
-            color: #4b3f35; /* Earthy charcoal/brown */
+            background-color: #f7f3ef;
+            color: #4b3f35;
         }
         .card {
             background: #ffffff;
@@ -24,10 +24,9 @@
         .active { display: block; }
         h2 { margin-top: 0; color: #4b3f35; font-weight: 700; }
 
-        /* Perfect Width Alignment */
         audio, textarea, .mos-scale {
             width: 100%;
-            box-sizing: border-box; /* Ensures padding stays inside the width */
+            box-sizing: border-box;
             margin-bottom: 20px;
         }
 
@@ -39,7 +38,7 @@
             font-size: 16px;
             background-color: #fdfaf6;
             color: #4b3f35;
-            resize: none; /* Keeps the look consistent */
+            resize: none;
         }
 
         .mos-scale { display: flex; justify-content: space-between; margin: 15px 0; }
@@ -63,6 +62,32 @@
         }
         .legend { font-size: 11px; color: #8c7e73; margin-top: 6px; }
 
+        .task-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 20px;
+            margin-bottom: 16px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+        .badge-rating       { background: #e8f0fe; color: #1a56a0; }
+        .badge-transcription { background: #fce8d5; color: #a0461a; }
+
+        .progress-bar-wrap {
+            background: #f0edea;
+            border-radius: 4px;
+            height: 6px;
+            margin-bottom: 24px;
+        }
+        .progress-bar-fill {
+            background: #4b3f35;
+            height: 6px;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
         button {
             background: #4b3f35;
             color: #ffffff;
@@ -76,6 +101,7 @@
             transition: opacity 0.2s;
         }
         button:hover { opacity: 0.9; }
+        .clearfix::after { content: ""; display: table; clear: both; }
     </style>
 </head>
 <body>
@@ -87,36 +113,49 @@
 
 <div id="intro-card" class="card active">
     <h2>TTS Quality Evaluation</h2>
-    <div class="intro-text">
-        <p>Welcome! You will listen to <strong>10 short audio clips</strong>. For each clip:</p>
-        <ul>
-            <li>Transcribe what you hear.</li>
-            <li>Rate the naturalness on a scale of 1 to 5.</li>
-        </ul>
-        <p>It takes about 5 minutes. <strong>One participant will win a 10€ Amazon Gift Card!</strong></p>
+    <p>Welcome! You will listen to <strong>20 short audio clips</strong> in two parts:</p>
+    <ul>
+        <li><strong>Part 1 (10 clips):</strong> Rate the naturalness of each clip on a scale of 1 to 5.</li>
+        <li><strong>Part 2 (10 clips):</strong> Write down what you heard in each clip.</li>
+    </ul>
+    <p>It takes about 10 minutes. <strong>One participant will win a 10€ Amazon Gift Card!</strong></p>
+    <div class="clearfix">
+        <button onclick="startSurvey()">Start Evaluation</button>
     </div>
-    <button onclick="startSurvey()">Start Evaluation</button>
 </div>
 
 <div id="survey-container" style="display:none;">
     <div class="card active" id="main-card">
-        <h2 id="task-title">Audio Sample 1 of 10</h2>
-        <audio id="audio-player" controls controlsList="nodownload"></audio>
 
-        <p><strong>Transcription:</strong><br>
-        <small>Write what you hear. Leave empty if unintelligible.</small></p>
-        <textarea id="transcription" placeholder="Type here..."></textarea>
-
-        <p><strong>Quality Rating (MOS):</strong></p>
-        <div class="mos-scale">
-            <div class="mos-option"><input type="radio" name="mos" id="m1" value="1"><label for="m1">1</label><div class="legend">Bad</div></div>
-            <div class="mos-option"><input type="radio" name="mos" id="m2" value="2"><label for="m2">2</label><div class="legend">Poor</div></div>
-            <div class="mos-option"><input type="radio" name="mos" id="m3" value="3"><label for="m3">3</label><div class="legend">Fair</div></div>
-            <div class="mos-option"><input type="radio" name="mos" id="m4" value="4"><label for="m4">4</label><div class="legend">Good</div></div>
-            <div class="mos-option"><input type="radio" name="mos" id="m5" value="5"><label for="m5">5</label><div class="legend">Excellent</div></div>
+        <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
         </div>
 
-        <div class="btn-container">
+        <span class="task-badge" id="task-badge"></span>
+        <h2 id="task-title"></h2>
+
+        <audio id="audio-player" controls controlsList="nodownload"></audio>
+
+        <!-- MOS rating (Part 1) -->
+        <div id="rating-section">
+            <p><strong>Quality Rating (MOS):</strong></p>
+            <div class="mos-scale">
+                <div class="mos-option"><input type="radio" name="mos" id="m1" value="1"><label for="m1">1</label><div class="legend">Bad</div></div>
+                <div class="mos-option"><input type="radio" name="mos" id="m2" value="2"><label for="m2">2</label><div class="legend">Poor</div></div>
+                <div class="mos-option"><input type="radio" name="mos" id="m3" value="3"><label for="m3">3</label><div class="legend">Fair</div></div>
+                <div class="mos-option"><input type="radio" name="mos" id="m4" value="4"><label for="m4">4</label><div class="legend">Good</div></div>
+                <div class="mos-option"><input type="radio" name="mos" id="m5" value="5"><label for="m5">5</label><div class="legend">Excellent</div></div>
+            </div>
+        </div>
+
+        <!-- Transcription (Part 2) -->
+        <div id="transcription-section" style="display:none;">
+            <p><strong>Transcription:</strong><br>
+            <small>Write what you heard. Leave empty if unintelligible.</small></p>
+            <textarea id="transcription" placeholder="Type here..."></textarea>
+        </div>
+
+        <div class="clearfix">
             <button onclick="nextQuestion()">Next</button>
         </div>
     </div>
@@ -124,21 +163,59 @@
 
 <script>
     const scriptURL = "https://script.google.com/macros/s/AKfycbz_yeQJXp0Sr4LDENVBviqQ1xZ_WdLJBW5L-i9M3QTxArKUEMnLFOm2RjD9LOzehGth/exec";
-    const baseURL = "https://raw.githubusercontent.com/Vorgesetzter/StyleTTS2/main/survey/TTS/Success/";
+    const baseURL   = "https://raw.githubusercontent.com/Vorgesetzter/StyleTTS2/main/survey/";
 
-    // LIST YOUR 40 FILENAMES HERE
-    const allAudios = ["sample1.wav", "sample2.wav"];
+    // 20 sentence groups — auto-generated by select_survey_samples.py
+    const sentenceGroups = [
+      { "id": 5,   "type": "mixed",        "gt": "GT/gt_005.wav",  "tts": "TTS/tts_005.wav",  "waveform": "Waveform/waveform_005.wav" },
+      { "id": 8,   "type": "both_success", "gt": "GT/gt_008.wav",  "tts": "TTS/tts_008.wav",  "waveform": "Waveform/waveform_008.wav" },
+      { "id": 11,  "type": "both_success", "gt": "GT/gt_011.wav",  "tts": "TTS/tts_011.wav",  "waveform": "Waveform/waveform_011.wav" },
+      { "id": 22,  "type": "both_success", "gt": "GT/gt_022.wav",  "tts": "TTS/tts_022.wav",  "waveform": "Waveform/waveform_022.wav" },
+      { "id": 25,  "type": "mixed",        "gt": "GT/gt_025.wav",  "tts": "TTS/tts_025.wav",  "waveform": "Waveform/waveform_025.wav" },
+      { "id": 26,  "type": "mixed",        "gt": "GT/gt_026.wav",  "tts": "TTS/tts_026.wav",  "waveform": "Waveform/waveform_026.wav" },
+      { "id": 28,  "type": "mixed",        "gt": "GT/gt_028.wav",  "tts": "TTS/tts_028.wav",  "waveform": "Waveform/waveform_028.wav" },
+      { "id": 30,  "type": "both_success", "gt": "GT/gt_030.wav",  "tts": "TTS/tts_030.wav",  "waveform": "Waveform/waveform_030.wav" },
+      { "id": 43,  "type": "both_success", "gt": "GT/gt_043.wav",  "tts": "TTS/tts_043.wav",  "waveform": "Waveform/waveform_043.wav" },
+      { "id": 46,  "type": "both_success", "gt": "GT/gt_046.wav",  "tts": "TTS/tts_046.wav",  "waveform": "Waveform/waveform_046.wav" },
+      { "id": 52,  "type": "both_success", "gt": "GT/gt_052.wav",  "tts": "TTS/tts_052.wav",  "waveform": "Waveform/waveform_052.wav" },
+      { "id": 53,  "type": "mixed",        "gt": "GT/gt_053.wav",  "tts": "TTS/tts_053.wav",  "waveform": "Waveform/waveform_053.wav" },
+      { "id": 58,  "type": "mixed",        "gt": "GT/gt_058.wav",  "tts": "TTS/tts_058.wav",  "waveform": "Waveform/waveform_058.wav" },
+      { "id": 60,  "type": "both_success", "gt": "GT/gt_060.wav",  "tts": "TTS/tts_060.wav",  "waveform": "Waveform/waveform_060.wav" },
+      { "id": 62,  "type": "both_success", "gt": "GT/gt_062.wav",  "tts": "TTS/tts_062.wav",  "waveform": "Waveform/waveform_062.wav" },
+      { "id": 72,  "type": "mixed",        "gt": "GT/gt_072.wav",  "tts": "TTS/tts_072.wav",  "waveform": "Waveform/waveform_072.wav" },
+      { "id": 77,  "type": "both_success", "gt": "GT/gt_077.wav",  "tts": "TTS/tts_077.wav",  "waveform": "Waveform/waveform_077.wav" },
+      { "id": 87,  "type": "mixed",        "gt": "GT/gt_087.wav",  "tts": "TTS/tts_087.wav",  "waveform": "Waveform/waveform_087.wav" },
+      { "id": 98,  "type": "mixed",        "gt": "GT/gt_098.wav",  "tts": "TTS/tts_098.wav",  "waveform": "Waveform/waveform_098.wav" },
+      { "id": 100, "type": "mixed",        "gt": "GT/gt_100.wav",  "tts": "TTS/tts_100.wav",  "waveform": "Waveform/waveform_100.wav" }
+    ];
 
-    for (let i = allAudios.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [allAudios[i], allAudios[j]] = [allAudios[j], allAudios[i]];
+    // Fisher-Yates shuffle
+    function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
     }
-    let selectedAudios = allAudios.slice(0, 10);
-    let currentIndex = 0;
-    let results = [["Filename", "Transcription", "MOS_Score", "Email"]];
 
-    // Check if already done
-    if(localStorage.getItem('tts_survey_done')) {
+    // For each group, randomly pick one version (gt / tts / waveform)
+    const versions = ["gt", "tts", "waveform"];
+    const shuffledGroups = shuffle([...sentenceGroups]);
+    const selectedClips = shuffledGroups.map(group => {
+        const version = versions[Math.floor(Math.random() * versions.length)];
+        return { file: group[version], version, sentenceId: group.id, bucketType: group.type };
+    });
+
+    // First 10 → Part 1 (MOS rating), last 10 → Part 2 (transcription)
+    const part1 = selectedClips.slice(0, 10);  // MOS rating
+    const part2 = selectedClips.slice(10, 20); // Transcription
+    const allClips = [...part1, ...part2];
+
+    let currentIndex = 0;
+    // [Filename, Version, SentenceId, BucketType, Task, Transcription, MOS_Score, Email]
+    let results = [["Filename", "Version", "SentenceId", "BucketType", "Task", "Transcription", "MOS_Score", "Email"]];
+
+    if (localStorage.getItem('tts_survey_done')) {
         document.getElementById('intro-card').classList.remove('active');
         document.getElementById('already-done').classList.add('active');
     }
@@ -149,54 +226,119 @@
         loadQuestion();
     }
 
+    function isRatingTask() { return currentIndex < 10; }
+
     function loadQuestion() {
-        document.getElementById('task-title').innerText = `Audio Sample ${currentIndex + 1} of ${selectedAudios.length}`;
-        document.getElementById('audio-player').src = baseURL + selectedAudios[currentIndex];
-        document.getElementById('transcription').value = "";
+        const total = allClips.length;
+        const clip  = allClips[currentIndex];
+        const task  = isRatingTask() ? "rating" : "transcription";
+        const partNum = isRatingTask() ? 1 : 2;
+        const partIdx = isRatingTask() ? currentIndex + 1 : currentIndex - 9;
+
+        // Progress bar
+        document.getElementById('progress-bar').style.width = (currentIndex / total * 100) + '%';
+
+        // Badge
+        const badge = document.getElementById('task-badge');
+        if (task === "rating") {
+            badge.textContent = "Part 1 — Quality Rating";
+            badge.className = "task-badge badge-rating";
+        } else {
+            badge.textContent = "Part 2 — Transcription";
+            badge.className = "task-badge badge-transcription";
+        }
+
+        document.getElementById('task-title').innerText = `Clip ${partIdx} of 10`;
+        document.getElementById('audio-player').src = baseURL + clip.file;
+
+        // Show/hide sections
+        document.getElementById('rating-section').style.display      = task === "rating" ? "block" : "none";
+        document.getElementById('transcription-section').style.display = task === "transcription" ? "block" : "none";
+
+        // Reset inputs
         document.querySelectorAll('input[name="mos"]').forEach(rb => rb.checked = false);
-        window.scrollTo(0,0);
+        document.getElementById('transcription').value = "";
+
+        window.scrollTo(0, 0);
     }
 
     function nextQuestion() {
-        const mos = document.querySelector('input[name="mos"]:checked')?.value;
-        if (!mos) {
-            alert("Please select a quality rating (1-5) before proceeding.");
+        const clip = allClips[currentIndex];
+        const task = isRatingTask() ? "rating" : "transcription";
+
+        if (task === "rating") {
+            const mos = document.querySelector('input[name="mos"]:checked')?.value;
+            if (!mos) { alert("Please select a quality rating (1–5) before proceeding."); return; }
+            results.push([clip.file, clip.version, clip.sentenceId, clip.bucketType, task,
+                          "", mos, ""]);
+        } else {
+            const transcription = document.getElementById('transcription').value.trim();
+            results.push([clip.file, clip.version, clip.sentenceId, clip.bucketType, task,
+                          `"${transcription.replace(/"/g, '""')}"`, "", ""]);
+        }
+
+        // Part 1 → Part 2 transition notice
+        if (currentIndex === 9) {
+            document.getElementById('main-card').innerHTML = `
+                <h2>Part 1 Complete!</h2>
+                <p>Great job! Now for <strong>Part 2</strong>: you will listen to 10 more clips and
+                write down what you hear. No quality rating needed.</p>
+                <div class="clearfix"><button onclick="continueToPartTwo()">Continue</button></div>`;
             return;
         }
 
-        const transcription = document.getElementById('transcription').value;
-        results.push([selectedAudios[currentIndex], `"${transcription.replace(/"/g, '""')}"`, mos, ""]);
-
         currentIndex++;
-        if (currentIndex < selectedAudios.length) { loadQuestion(); }
+        if (currentIndex < allClips.length) { loadQuestion(); }
         else { showFinalSlide(); }
+    }
+
+    function continueToPartTwo() {
+        currentIndex++;
+        document.getElementById('main-card').innerHTML = `
+            <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar" style="width:50%"></div></div>
+            <span class="task-badge badge-transcription" id="task-badge"></span>
+            <h2 id="task-title"></h2>
+            <audio id="audio-player" controls controlsList="nodownload"></audio>
+            <div id="rating-section" style="display:none;"></div>
+            <div id="transcription-section">
+                <p><strong>Transcription:</strong><br>
+                <small>Write what you heard. Leave empty if unintelligible.</small></p>
+                <textarea id="transcription" placeholder="Type here..."></textarea>
+            </div>
+            <div class="clearfix"><button onclick="nextQuestion()">Next</button></div>`;
+        loadQuestion();
     }
 
     function showFinalSlide() {
         document.getElementById('main-card').innerHTML = `
             <h2>Thank You!</h2>
-            <p>Your evaluation is complete. To enter the draw for the <strong>10€ Amazon Gift Card</strong>, enter your email below (optional):</p>
-            <input type="email" id="user-email" placeholder="email@example.com" style="width:100%; padding:12px; border-radius:8px; border:1px solid #ddd; margin-bottom:20px;">
-            <button onclick="finalSubmit()">Submit & Finish</button>
-        `;
+            <p>Your evaluation is complete. To enter the draw for the <strong>10€ Amazon Gift Card</strong>,
+            enter your email below (optional):</p>
+            <input type="email" id="user-email" placeholder="email@example.com"
+                   style="width:100%; padding:12px; border-radius:8px; border:1px solid #ddd; margin-bottom:20px; box-sizing:border-box;">
+            <div class="clearfix"><button onclick="finalSubmit()">Submit &amp; Finish</button></div>`;
     }
 
     function finalSubmit() {
-        const email = document.getElementById('user-email').value;
-        results[1][3] = email; // Attach email to the first data row for the researcher
+        const email = document.getElementById('user-email')?.value ?? "";
+        // Attach email to last column of first data row
+        if (results.length > 1) results[1][7] = email;
 
-        document.getElementById('main-card').innerHTML = `<h2>Submitting...</h2>`;
+        document.getElementById('main-card').innerHTML = `<h2>Submitting…</h2>`;
 
         fetch(scriptURL, {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ results: results })
+            body: JSON.stringify({ results })
         }).then(() => {
             localStorage.setItem('tts_survey_done', 'true');
-            document.getElementById('main-card').innerHTML = `<h2>Success!</h2><p>Results saved. You can close this window now.</p>`;
+            document.getElementById('main-card').innerHTML =
+                `<h2>Success!</h2><p>Results saved. You can close this window now.</p>`;
         }).catch(() => {
-            document.getElementById('main-card').innerHTML = `<h2>Error</h2><p>Submission failed. Please try again or contact the researcher.</p><button onclick="finalSubmit()">Retry</button>`;
+            document.getElementById('main-card').innerHTML =
+                `<h2>Error</h2><p>Submission failed. Please try again or contact the researcher.</p>
+                 <div class="clearfix"><button onclick="finalSubmit()">Retry</button></div>`;
         });
     }
 </script>
