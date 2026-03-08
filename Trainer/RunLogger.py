@@ -285,6 +285,11 @@ class RunLogger:
     def run_final_inference(self, best_candidate):
         audio_best = best_candidate.data[0].unsqueeze(0).to(self.device)
 
+        # Use the transcription stored during optimization (same batch context → deterministic).
+        # Fall back to re-inference only for candidates created before this fix.
+        if best_candidate.data is not None and len(best_candidate.data) > 1 and best_candidate.data[1]:
+            return audio_best, best_candidate.data[1]
+
         asr_model = self.asr_model.module if isinstance(self.asr_model, torch.nn.DataParallel) else self.asr_model
         asr_texts, _ = asr_model.inference(audio_best)
         asr_text = asr_texts[0] if isinstance(asr_texts, list) else asr_texts

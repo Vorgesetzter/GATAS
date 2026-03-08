@@ -98,4 +98,4 @@ class WaveformAdversarialTrainer(AdversarialTrainer):
 
         audio_list = [audio_mixed_batch[i].detach().cpu() for i in range(current_batch_size)]
 
-        return stop_optimization, batch_scores_list, elapsed_time, audio_list
+        return stop_optimization, batch_scores_list, elapsed_time, audio_list, asr_texts
