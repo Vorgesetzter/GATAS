@@ -43,11 +43,11 @@
 
         h2 { margin-top: 0; color: #4b3f35; font-weight: 700; }
 
-        /* Right column hidden until revealed */
-        #col-results {
+        /* Results content hidden until revealed */
+        #results-content {
             display: none;
         }
-        #col-results.revealed {
+        #results-content.revealed {
             display: block;
         }
 
@@ -365,12 +365,16 @@
             <div class="mos-option"><input type="radio" name="mos" id="m5" value="5"><label for="m5">5</label><div class="legend">Excellent</div></div>
         </div>
 
-        <button class="btn-reveal" id="reveal-btn" onclick="toggleReveal()">Reveal Answer</button>
     </div>
 
     <!-- RIGHT COLUMN: TTS Results -->
     <div class="col-card" id="col-results">
-        <h2>TTS Results</h2>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2 style="margin:0;">TTS Results</h2>
+            <button class="btn-reveal" id="reveal-btn" onclick="toggleReveal()" style="width:auto; padding:10px 20px;">Reveal Answer</button>
+        </div>
+
+        <div id="results-content">
 
         <!-- CER -->
         <div class="cer-row" id="cer-block"></div>
@@ -446,6 +450,7 @@
             </div>
         </div>
 
+        </div><!-- end results-content -->
     </div><!-- end col-results -->
 
 </div><!-- end main-layout -->
@@ -534,7 +539,7 @@
         document.querySelectorAll('input[name="mos"]').forEach(r => r.checked = false);
 
         revealed = false;
-        document.getElementById('col-results').classList.remove('revealed');
+        document.getElementById('results-content').classList.remove('revealed');
         document.getElementById('reveal-btn').textContent = 'Reveal Answer';
 
         document.getElementById('ans-gt').innerHTML  = highlightText(s.ground_truth_text, s.asr_transcription);
@@ -650,7 +655,7 @@
 
     function toggleReveal() {
         revealed = !revealed;
-        document.getElementById('col-results').classList.toggle('revealed', revealed);
+        document.getElementById('results-content').classList.toggle('revealed', revealed);
         document.getElementById('reveal-btn').textContent = revealed ? 'Hide Answer' : 'Reveal Answer';
         if (revealed) renderCER();
         window.scrollTo(0, 0);
