@@ -218,6 +218,29 @@
         }
         .filter-btn:hover { background: #e8e2db; }
         .filter-btn.active { background: #4b3f35; color: #fff; border-color: #4b3f35; }
+
+        .cer-row { margin-bottom: 16px; }
+        .cer-box {
+            background: #f0edea;
+            border: 1px solid #dcd3cb;
+            border-radius: 8px;
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .cer-score {
+            font-size: 26px;
+            font-weight: 700;
+            min-width: 64px;
+            text-align: center;
+        }
+        .cer-score.cer-good   { color: #1a6e1a; }
+        .cer-score.cer-medium { color: #a06010; }
+        .cer-score.cer-bad    { color: #9e1a1a; }
+        .cer-detail { flex: 1; font-size: 13px; color: #6b5c50; line-height: 1.5; }
+        .cer-detail strong { color: #4b3f35; }
+        .cer-empty { font-size: 13px; color: #8c7e73; font-style: italic; }
     </style>
 </head>
 <body>
@@ -288,6 +311,9 @@
     <!-- Answer panel -->
     <div class="answer-panel" id="answer-panel">
 
+        <!-- CER block -->
+        <div class="cer-row" id="cer-block"></div>
+
         <div class="answer-row">
             <div class="answer-box full-width">
                 <div class="label">Ground Truth (original sentence)</div>
@@ -313,24 +339,20 @@
                 <div class="metric-sub">Predicted MOS · scale 1–5</div>
             </div>
             <div class="answer-box">
-                <div class="label">UTMOS (ground truth)</div>
-                <div class="metric-value" id="ans-utmos-gt"></div>
-                <div class="metric-sub">Predicted MOS · scale 1–5</div>
-            </div>
-        </div>
-
-        <div class="answer-row">
-            <div class="answer-box">
                 <div class="label">PESQ</div>
                 <div class="metric-value" id="ans-pesq"></div>
                 <div class="metric-sub">Perceptual quality · ≤0.20 = success</div>
             </div>
-            <div class="answer-box">
+        </div>
+
+        <div class="answer-row">
+            <div class="answer-box full-width">
                 <div class="label">SET_OVERLAP</div>
                 <div class="metric-value" id="ans-overlap"></div>
                 <div class="metric-sub">Content-word overlap · ≤0.50 = success</div>
             </div>
         </div>
+
 
     </div>
 </div>
@@ -432,7 +454,6 @@
         document.getElementById('ans-gt').textContent    = s.ground_truth_text;
         document.getElementById('ans-asr').textContent   = s.asr_transcription;
         document.getElementById('ans-utmos-best').textContent = s.utmos_best.toFixed(4);
-        document.getElementById('ans-utmos-gt').textContent   = s.utmos_gt.toFixed(4);
         document.getElementById('ans-pesq').textContent   = s.pesq.toFixed(4);
         document.getElementById('ans-overlap').textContent = s.set_overlap.toFixed(2);
 
@@ -446,6 +467,64 @@
     }
 
     // -----------------------------------------------------------------------
+    // CER computation
+    // -----------------------------------------------------------------------
+    function normalize(s) {
+        return s.toLowerCase().replace(/[^a-z]/g, '');
+    }
+
+    function cer(ref, hyp) {
+        const r = normalize(ref);
+        const h = normalize(hyp);
+        if (r.length === 0) return hyp.trim().length === 0 ? 0 : 1;
+        // Levenshtein distance at character level
+        const m = r.length, n = h.length;
+        const dp = Array.from({length: m + 1}, (_, i) => Array.from({length: n + 1}, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+        for (let i = 1; i <= m; i++)
+            for (let j = 1; j <= n; j++)
+                dp[i][j] = r[i-1] === h[j-1]
+                    ? dp[i-1][j-1]
+                    : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+        return dp[m][n] / m;
+    }
+
+    function cerColorClass(v) {
+        if (v <= 0.15) return 'cer-good';
+        if (v <= 0.40) return 'cer-medium';
+        return 'cer-bad';
+    }
+
+    function renderCER() {
+        const block = document.getElementById('cer-block');
+        const userText = document.getElementById('transcription').value.trim();
+        const si = filteredIndices[currentPos];
+        const s  = selfEvalSamples[si];
+
+        if (!userText) {
+            block.innerHTML = '<div class="cer-box"><span class="cer-empty">No transcription entered — CER not available.</span></div>';
+            return;
+        }
+
+        const cerGT  = cer(s.ground_truth_text, userText);
+        const cerASR = cer(s.asr_transcription, userText);
+
+        block.innerHTML = `
+            <div class="answer-box full-width" style="margin-bottom:16px;">
+                <div class="label">Your CER (Character Error Rate)</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
+                    <div class="cer-box">
+                        <div class="cer-score ${cerColorClass(cerGT)}">${(cerGT * 100).toFixed(1)}%</div>
+                        <div class="cer-detail">vs <strong>Ground Truth</strong><br>${cerGT <= 0.15 ? 'Close match' : cerGT <= 0.40 ? 'Partial match' : 'High error'}</div>
+                    </div>
+                    <div class="cer-box">
+                        <div class="cer-score ${cerColorClass(cerASR)}">${(cerASR * 100).toFixed(1)}%</div>
+                        <div class="cer-detail">vs <strong>ASR transcript</strong><br>${cerASR <= 0.15 ? 'Close match' : cerASR <= 0.40 ? 'Partial match' : 'High error'}</div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    // -----------------------------------------------------------------------
     // Reveal toggle
     // -----------------------------------------------------------------------
     function toggleReveal() {
@@ -453,6 +532,7 @@
         document.getElementById('answer-panel').classList.toggle('revealed', revealed);
         document.getElementById('reveal-btn').textContent =
             revealed ? 'Hide Answer' : 'Reveal Answer';
+        if (revealed) renderCER();
     }
 
     // -----------------------------------------------------------------------
