@@ -241,6 +241,9 @@
         .cer-detail { flex: 1; font-size: 13px; color: #6b5c50; line-height: 1.5; }
         .cer-detail strong { color: #4b3f35; }
         .cer-empty { font-size: 13px; color: #8c7e73; font-style: italic; }
+
+        .metric-value.met   { color: #1a6e1a; }
+        .metric-value.unmet { color: #9e1a1a; }
     </style>
 </head>
 <body>
@@ -336,20 +339,33 @@
             <div class="answer-box">
                 <div class="label">UTMOS (adversarial)</div>
                 <div class="metric-value" id="ans-utmos-best"></div>
-                <div class="metric-sub">Predicted MOS · scale 1–5</div>
+                <div class="metric-sub">Predicted MOS · ≥3.5 = naturalness preserved</div>
             </div>
+            <div class="answer-box">
+                <div class="label">UTMOS (ground truth)</div>
+                <div class="metric-value" id="ans-utmos-gt"></div>
+                <div class="metric-sub">Predicted MOS · reference</div>
+            </div>
+        </div>
+
+        <div class="answer-row">
             <div class="answer-box">
                 <div class="label">PESQ</div>
                 <div class="metric-value" id="ans-pesq"></div>
                 <div class="metric-sub">Perceptual quality · ≤0.20 = success</div>
             </div>
+            <div class="answer-box">
+                <div class="label">SET_OVERLAP</div>
+                <div class="metric-value" id="ans-overlap"></div>
+                <div class="metric-sub">Content-word overlap · ≤0.50 = success</div>
+            </div>
         </div>
 
         <div class="answer-row">
             <div class="answer-box full-width">
-                <div class="label">SET_OVERLAP</div>
-                <div class="metric-value" id="ans-overlap"></div>
-                <div class="metric-sub">Content-word overlap · ≤0.50 = success</div>
+                <div class="label">SBERT Semantic Similarity</div>
+                <div class="metric-value" id="ans-sbert"></div>
+                <div class="metric-sub">ASR vs ground truth · ≤0.60 = semantic divergence (success)</div>
             </div>
         </div>
 
@@ -451,11 +467,14 @@
         document.getElementById('reveal-btn').textContent = 'Reveal Answer';
 
         // Fill answer fields
-        document.getElementById('ans-gt').textContent    = s.ground_truth_text;
-        document.getElementById('ans-asr').textContent   = s.asr_transcription;
-        document.getElementById('ans-utmos-best').textContent = s.utmos_best.toFixed(4);
-        document.getElementById('ans-pesq').textContent   = s.pesq.toFixed(4);
-        document.getElementById('ans-overlap').textContent = s.set_overlap.toFixed(2);
+        document.getElementById('ans-gt').textContent  = s.ground_truth_text;
+        document.getElementById('ans-asr').textContent = s.asr_transcription;
+
+        setMetric('ans-utmos-best', s.utmos_best.toFixed(4), s.utmos_best >= 3.5);
+        setMetric('ans-utmos-gt',   s.utmos_gt.toFixed(4),   null);   // reference only
+        setMetric('ans-pesq',       s.pesq.toFixed(4),        s.pesq <= 0.20);
+        setMetric('ans-overlap',    s.set_overlap.toFixed(2), s.set_overlap <= 0.50);
+        setMetric('ans-sbert',      s.semantic_similarity.toFixed(4), s.semantic_similarity <= 0.60);
 
         // Counter & nav buttons
         document.getElementById('sample-counter').textContent =
@@ -464,6 +483,15 @@
         document.getElementById('next-btn').disabled = (pos === filteredIndices.length - 1);
 
         window.scrollTo(0, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // Metric helpers
+    // -----------------------------------------------------------------------
+    function setMetric(id, text, met) {
+        const el = document.getElementById(id);
+        el.textContent = text;
+        el.className = 'metric-value' + (met === null ? '' : met ? ' met' : ' unmet');
     }
 
     // -----------------------------------------------------------------------
@@ -488,10 +516,18 @@
         return dp[m][n] / m;
     }
 
+    // CER threshold: mean(CER_GT) + 1σ = 0.0552 + 0.1090 = 0.1642
+    const CER_THRESHOLD = 0.1642;
+
     function cerColorClass(v) {
-        if (v <= 0.15) return 'cer-good';
-        if (v <= 0.40) return 'cer-medium';
+        if (v <= CER_THRESHOLD) return 'cer-good';
+        if (v <= 0.40)          return 'cer-medium';
         return 'cer-bad';
+    }
+
+    function cerLabel(v) {
+        if (v <= CER_THRESHOLD) return `≤ threshold (${(CER_THRESHOLD*100).toFixed(1)}%)`;
+        return `> threshold (${(CER_THRESHOLD*100).toFixed(1)}%)`;
     }
 
     function renderCER() {
@@ -510,15 +546,15 @@
 
         block.innerHTML = `
             <div class="answer-box full-width" style="margin-bottom:16px;">
-                <div class="label">Your CER (Character Error Rate)</div>
+                <div class="label">Your CER (Character Error Rate) · threshold: ${(CER_THRESHOLD*100).toFixed(1)}% (mean + 1σ)</div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
                     <div class="cer-box">
                         <div class="cer-score ${cerColorClass(cerGT)}">${(cerGT * 100).toFixed(1)}%</div>
-                        <div class="cer-detail">vs <strong>Ground Truth</strong><br>${cerGT <= 0.15 ? 'Close match' : cerGT <= 0.40 ? 'Partial match' : 'High error'}</div>
+                        <div class="cer-detail">vs <strong>Ground Truth</strong><br>${cerLabel(cerGT)}</div>
                     </div>
                     <div class="cer-box">
                         <div class="cer-score ${cerColorClass(cerASR)}">${(cerASR * 100).toFixed(1)}%</div>
-                        <div class="cer-detail">vs <strong>ASR transcript</strong><br>${cerASR <= 0.15 ? 'Close match' : cerASR <= 0.40 ? 'Partial match' : 'High error'}</div>
+                        <div class="cer-detail">vs <strong>ASR transcript</strong><br>${cerLabel(cerASR)}</div>
                     </div>
                 </div>
             </div>`;
