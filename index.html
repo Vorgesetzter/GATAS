@@ -7,12 +7,15 @@
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            max-width: 660px;
+            max-width: 700px;
             margin: 40px auto;
             padding: 20px;
             background-color: #f7f3ef;
             color: #4b3f35;
+            transition: max-width 0.3s ease;
         }
+        body.wide { max-width: 1300px; }
+
         .card {
             background: #ffffff;
             padding: 30px;
@@ -22,7 +25,6 @@
             margin-bottom: 20px;
         }
         h2 { margin-top: 0; color: #4b3f35; font-weight: 700; }
-        h3 { margin: 0 0 12px; color: #4b3f35; font-size: 15px; font-weight: 600; }
 
         .notice-banner {
             background: #fef3cd;
@@ -121,24 +123,33 @@
             width: 100%;
             padding: 12px;
             font-size: 15px;
-            margin-bottom: 0;
         }
         .btn-reveal:hover { opacity: 0.9; }
 
-        /* Answer panel */
-        .answer-panel {
-            display: none;
-            margin-top: 20px;
-            border-top: 1.5px solid #e8e2db;
-            padding-top: 20px;
+        /* Two-column eval layout */
+        .eval-layout {
+            display: block;
         }
-        .answer-panel.revealed { display: block; }
+        .eval-layout.revealed {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            align-items: start;
+        }
+
+        /* Answer panel — right column */
+        .answer-panel { display: none; }
+        .answer-panel.revealed {
+            display: block;
+            border-left: 1.5px solid #e8e2db;
+            padding-left: 30px;
+        }
 
         .answer-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 16px;
+            gap: 12px;
+            margin-bottom: 12px;
         }
         .answer-box {
             background: #f7f3ef;
@@ -153,20 +164,23 @@
             letter-spacing: 0.06em;
             color: #8c7e73;
             margin-bottom: 6px;
+            display: flex;
+            align-items: center;
         }
         .answer-box .value {
             font-size: 15px;
             color: #4b3f35;
             line-height: 1.4;
         }
-        .answer-box.full-width {
-            grid-column: 1 / -1;
-        }
+        .answer-box.full-width { grid-column: 1 / -1; }
+
         .metric-value {
             font-size: 22px;
             font-weight: 700;
             color: #4b3f35;
         }
+        .metric-value.met   { color: #0173B2; }
+        .metric-value.unmet { color: #DE8F05; }
         .metric-sub {
             font-size: 12px;
             color: #8c7e73;
@@ -181,14 +195,15 @@
             font-weight: 700;
             margin-left: 8px;
         }
-        .success-true  { background: #d4f0d4; color: #1a6e1a; }
-        .success-false { background: #fde8e8; color: #9e1a1a; }
+        .success-true  { background: #cce3f5; color: #0173B2; }
+        .success-false { background: #faebd0; color: #DE8F05; }
 
         .section-label {
             font-size: 13px;
             font-weight: 600;
             color: #8c7e73;
             margin-bottom: 6px;
+            margin-top: 0;
         }
         .listen-hint { font-size: 13px; color: #8c7e73; margin-bottom: 12px; margin-top: 0; }
 
@@ -219,7 +234,7 @@
         .filter-btn:hover { background: #e8e2db; }
         .filter-btn.active { background: #4b3f35; color: #fff; border-color: #4b3f35; }
 
-        .cer-row { margin-bottom: 16px; }
+        .cer-row { margin-bottom: 12px; }
         .cer-box {
             background: #f0edea;
             border: 1px solid #dcd3cb;
@@ -235,28 +250,18 @@
             min-width: 64px;
             text-align: center;
         }
-        .cer-score.cer-good   { color: #1a6e1a; }
-        .cer-score.cer-medium { color: #a06010; }
-        .cer-score.cer-bad    { color: #9e1a1a; }
+        .cer-score.cer-good   { color: #0173B2; }
+        .cer-score.cer-medium { color: #DE8F05; }
+        .cer-score.cer-bad    { color: #DE8F05; }
         .cer-detail { flex: 1; font-size: 13px; color: #6b5c50; line-height: 1.5; }
         .cer-detail strong { color: #4b3f35; }
         .cer-empty { font-size: 13px; color: #8c7e73; font-style: italic; }
 
-        .metric-value.met   { color: #1a6e1a; }
-        .metric-value.unmet { color: #9e1a1a; }
-
-        /* Content word highlighting */
+        /* Checkword highlighting */
         .content-word { font-weight: 700; color: #4b3f35; }
         .stop-word    { color: #a89f96; }
         .word-match   { background: #cce3f5; color: #0173B2; border-radius: 3px; padding: 0 2px; }
         .word-miss    { background: #faebd0; color: #DE8F05; border-radius: 3px; padding: 0 2px; }
-        .highlight-legend {
-            font-size: 11px; color: #8c7e73; margin-top: 8px; display: flex; gap: 12px; flex-wrap: wrap;
-        }
-        .highlight-legend span { display: flex; align-items: center; gap: 4px; }
-        .legend-dot {
-            display: inline-block; width: 10px; height: 10px; border-radius: 2px;
-        }
 
         /* Info tooltip */
         .info-icon {
@@ -310,7 +315,6 @@
         }
         .info-icon:hover .tooltip,
         .info-icon.open .tooltip { display: block; }
-        .answer-box .label { display: flex; align-items: center; }
     </style>
 </head>
 <body>
@@ -335,8 +339,7 @@
     </div>
 
     <div class="selector-row">
-        <select id="sample-select" onchange="loadSample(parseInt(this.value))">
-        </select>
+        <select id="sample-select" onchange="loadSample(parseInt(this.value))"></select>
         <button onclick="pickRandom()" class="btn-outline">Random</button>
     </div>
 
@@ -355,109 +358,109 @@
         <span id="success-badge" class="success-badge" title="Attack success = PESQ ≤ 0.20 AND SET_OVERLAP ≤ 0.50 both met"></span>
     </div>
 
-    <!-- Audio -->
-    <p class="section-label">Adversarial Audio</p>
-    <audio id="audio-player" controls controlsList="nodownload"></audio>
-    <p class="listen-hint" id="listen-hint">Listen before rating.</p>
+    <div class="eval-layout" id="eval-layout">
 
-    <!-- Transcription input -->
-    <p style="margin:0 0 6px;"><strong>What did you hear?</strong>
-        <small style="color:#8c7e73; font-weight:400;"> — leave empty if unintelligible</small></p>
-    <textarea id="transcription" placeholder="Type what you heard…"></textarea>
+        <!-- Left column: audio, transcription, MOS, reveal -->
+        <div id="eval-left">
+            <p class="section-label">Adversarial Audio</p>
+            <audio id="audio-player" controls controlsList="nodownload"></audio>
+            <p class="listen-hint">Listen before rating.</p>
 
-    <!-- MOS -->
-    <p style="margin: 16px 0 6px;"><strong>Naturalness Rating (MOS):</strong></p>
-    <div class="mos-scale">
-        <div class="mos-option"><input type="radio" name="mos" id="m1" value="1"><label for="m1">1</label><div class="legend">Bad</div></div>
-        <div class="mos-option"><input type="radio" name="mos" id="m2" value="2"><label for="m2">2</label><div class="legend">Poor</div></div>
-        <div class="mos-option"><input type="radio" name="mos" id="m3" value="3"><label for="m3">3</label><div class="legend">Fair</div></div>
-        <div class="mos-option"><input type="radio" name="mos" id="m4" value="4"><label for="m4">4</label><div class="legend">Good</div></div>
-        <div class="mos-option"><input type="radio" name="mos" id="m5" value="5"><label for="m5">5</label><div class="legend">Excellent</div></div>
-    </div>
+            <p style="margin:0 0 6px;"><strong>What did you hear?</strong>
+                <small style="color:#8c7e73; font-weight:400;"> — leave empty if unintelligible</small></p>
+            <textarea id="transcription" placeholder="Type what you heard…"></textarea>
 
-    <!-- Reveal button -->
-    <button class="btn-reveal" id="reveal-btn" onclick="toggleReveal()">Reveal Answer</button>
-
-    <!-- Answer panel -->
-    <div class="answer-panel" id="answer-panel">
-
-        <!-- CER block -->
-        <div class="cer-row" id="cer-block"></div>
-
-        <!-- Word highlighting legend -->
-        <div style="background:#f7f3ef; border:1px solid #e8e2db; border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:12px; color:#6b5c50;">
-            <strong style="color:#4b3f35; display:block; margin-bottom:6px;">Word Highlighting</strong>
-            <ul style="margin:0; padding-left:18px; line-height:1.9;">
-                <li><span style="color:#a89f96;">Grey</span> = stopword (function word, not evaluated by SET_OVERLAP)</li>
-                <li><strong style="color:#4b3f35;">Bold</strong> = checkword: words remaining after removing function words ("the", "on", "a", "is", ...) via a stopword list. These carry semantic content and are what SET_OVERLAP evaluates.</li>
-                <li><span style="background:#cce3f5; color:#0173B2; border-radius:3px; padding:0 4px; font-weight:700;">Blue</span> = checkword found in both GT and ASR</li>
-                <li><span style="background:#faebd0; color:#DE8F05; border-radius:3px; padding:0 4px; font-weight:700;">Orange</span> = checkword missing from the other text</li>
-                <li style="color:#a89f96;">Highlighting uses exact matching; SET_OVERLAP additionally applies lemmatisation</li>
-            </ul>
-        </div>
-
-        <div class="answer-row">
-            <div class="answer-box full-width">
-                <div class="label">Ground Truth (original sentence)</div>
-                <div class="value" id="ans-gt"></div>
+            <p style="margin: 16px 0 6px;"><strong>Naturalness Rating (MOS):</strong></p>
+            <div class="mos-scale">
+                <div class="mos-option"><input type="radio" name="mos" id="m1" value="1"><label for="m1">1</label><div class="legend">Bad</div></div>
+                <div class="mos-option"><input type="radio" name="mos" id="m2" value="2"><label for="m2">2</label><div class="legend">Poor</div></div>
+                <div class="mos-option"><input type="radio" name="mos" id="m3" value="3"><label for="m3">3</label><div class="legend">Fair</div></div>
+                <div class="mos-option"><input type="radio" name="mos" id="m4" value="4"><label for="m4">4</label><div class="legend">Good</div></div>
+                <div class="mos-option"><input type="radio" name="mos" id="m5" value="5"><label for="m5">5</label><div class="legend">Excellent</div></div>
             </div>
+
+            <button class="btn-reveal" id="reveal-btn" onclick="toggleReveal()">Reveal Answer</button>
         </div>
 
-        <div class="answer-row">
-            <div class="answer-box full-width">
-                <div class="label">ASR Transcription (from adversarial audio)</div>
-                <div class="value" id="ans-asr"></div>
+        <!-- Right column: answer panel -->
+        <div class="answer-panel" id="answer-panel">
+
+            <!-- CER block -->
+            <div class="cer-row" id="cer-block"></div>
+
+            <!-- Word highlighting legend -->
+            <div style="background:#f7f3ef; border:1px solid #e8e2db; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:12px; color:#6b5c50;">
+                <strong style="color:#4b3f35; display:block; margin-bottom:6px;">Word Highlighting</strong>
+                <ul style="margin:0; padding-left:18px; line-height:1.9;">
+                    <li><span style="color:#a89f96;">Grey</span> = stopword (function word, not evaluated by SET_OVERLAP)</li>
+                    <li><strong style="color:#4b3f35;">Bold</strong> = checkword: words remaining after removing function words ("the", "on", "a", "is", ...) via a stopword list. These carry semantic content and are what SET_OVERLAP evaluates.</li>
+                    <li><span style="background:#cce3f5; color:#0173B2; border-radius:3px; padding:0 4px; font-weight:700;">Blue</span> = checkword found in both GT and ASR</li>
+                    <li><span style="background:#faebd0; color:#DE8F05; border-radius:3px; padding:0 4px; font-weight:700;">Orange</span> = checkword missing from the other text</li>
+                    <li style="color:#a89f96;">Highlighting uses exact matching; SET_OVERLAP additionally applies lemmatisation</li>
+                </ul>
             </div>
-        </div>
 
-        <!-- GT audio for comparison -->
-        <p class="section-label" style="margin-top:4px;">Ground Truth Audio (for comparison)</p>
-        <audio id="gt-audio-player" controls controlsList="nodownload" style="width:100%; margin-bottom:16px;"></audio>
-
-        <div class="answer-row">
-            <div class="answer-box">
-                <div class="label">UTMOS
-                    <span class="info-icon" onclick="this.classList.toggle('open')">i
-                        <span class="tooltip">UTMOS is an automatic MOS predictor trained on human speech quality ratings. It estimates naturalness on a 1–5 scale without human listeners. A score ≥ 3.5 indicates the adversarial audio still sounds natural.</span>
-                    </span>
+            <div class="answer-row">
+                <div class="answer-box full-width">
+                    <div class="label">Ground Truth (original sentence)</div>
+                    <div class="value" id="ans-gt"></div>
                 </div>
-                <div class="metric-value" id="ans-utmos-best"></div>
-                <div class="metric-sub">Predicted MOS · threshold ≥3.5</div>
             </div>
-            <div class="answer-box">
-                <div class="label">PESQ
-                    <span class="info-icon" onclick="this.classList.toggle('open')">i
-                        <span class="tooltip">Perceptual Evaluation of Speech Quality. Measures perceptual distortion between the adversarial and ground truth audio. Here it is normalised to [0, 1] and inverted: 0 = identical to GT, 1 = maximally distorted. Success threshold ≤ 0.20 means the audio remains perceptually close to the original.</span>
-                    </span>
-                </div>
-                <div class="metric-value" id="ans-pesq"></div>
-                <div class="metric-sub">Perceptual quality · threshold ≤0.20</div>
-            </div>
-        </div>
 
-        <div class="answer-row">
-            <div class="answer-box">
-                <div class="label">SET_OVERLAP
-                    <span class="info-icon" onclick="this.classList.toggle('open')">i
-                        <span class="tooltip">Fraction of checkwords shared between the ground truth and the ASR transcription of the adversarial audio, after lemmatisation. Checkwords are words remaining after removing function words (stopwords). 0 = no shared checkwords, 1 = identical. Success threshold ≤ 0.50.</span>
-                    </span>
+            <div class="answer-row">
+                <div class="answer-box full-width">
+                    <div class="label">ASR Transcription (from adversarial audio)</div>
+                    <div class="value" id="ans-asr"></div>
                 </div>
-                <div class="metric-value" id="ans-overlap"></div>
-                <div class="metric-sub">Checkword overlap · threshold ≤0.50</div>
             </div>
-            <div class="answer-box">
-                <div class="label">SBERT Semantic Similarity
-                    <span class="info-icon" onclick="this.classList.toggle('open')">i
-                        <span class="tooltip">Cosine similarity between Sentence-BERT embeddings of the ground truth text and the ASR transcription of the adversarial audio. Measures how much the meaning diverged. 1 = identical meaning, 0 = completely unrelated. Success threshold ≤ 0.60 indicates meaningful semantic divergence.</span>
-                    </span>
+
+            <p class="section-label">Ground Truth Audio (for comparison)</p>
+            <audio id="gt-audio-player" controls controlsList="nodownload" style="width:100%; margin-bottom:12px;"></audio>
+
+            <div class="answer-row">
+                <div class="answer-box">
+                    <div class="label">UTMOS
+                        <span class="info-icon" onclick="this.classList.toggle('open')">i
+                            <span class="tooltip">UTMOS is an automatic MOS predictor trained on human speech quality ratings. It estimates naturalness on a 1–5 scale without human listeners. A score ≥ 3.5 indicates the adversarial audio still sounds natural.</span>
+                        </span>
+                    </div>
+                    <div class="metric-value" id="ans-utmos-best"></div>
+                    <div class="metric-sub">Predicted MOS · threshold ≥3.5</div>
                 </div>
-                <div class="metric-value" id="ans-sbert"></div>
-                <div class="metric-sub">ASR vs ground truth · threshold ≤0.60</div>
+                <div class="answer-box">
+                    <div class="label">PESQ
+                        <span class="info-icon" onclick="this.classList.toggle('open')">i
+                            <span class="tooltip">Perceptual Evaluation of Speech Quality. Measures perceptual distortion between the adversarial and ground truth audio. Here it is normalised to [0, 1] and inverted: 0 = identical to GT, 1 = maximally distorted. Success threshold ≤ 0.20 means the audio remains perceptually close to the original.</span>
+                        </span>
+                    </div>
+                    <div class="metric-value" id="ans-pesq"></div>
+                    <div class="metric-sub">Perceptual quality · threshold ≤0.20</div>
+                </div>
             </div>
-        </div>
 
+            <div class="answer-row">
+                <div class="answer-box">
+                    <div class="label">SET_OVERLAP
+                        <span class="info-icon" onclick="this.classList.toggle('open')">i
+                            <span class="tooltip">Fraction of checkwords shared between the ground truth and the ASR transcription of the adversarial audio, after lemmatisation. Checkwords are words remaining after removing function words (stopwords). 0 = no shared checkwords, 1 = identical. Success threshold ≤ 0.50.</span>
+                        </span>
+                    </div>
+                    <div class="metric-value" id="ans-overlap"></div>
+                    <div class="metric-sub">Checkword overlap · threshold ≤0.50</div>
+                </div>
+                <div class="answer-box">
+                    <div class="label">SBERT Semantic Similarity
+                        <span class="info-icon" onclick="this.classList.toggle('open')">i
+                            <span class="tooltip">Cosine similarity between Sentence-BERT embeddings of the ground truth text and the ASR transcription of the adversarial audio. Measures how much the meaning diverged. 1 = identical meaning, 0 = completely unrelated. Success threshold ≤ 0.60 indicates meaningful semantic divergence.</span>
+                        </span>
+                    </div>
+                    <div class="metric-value" id="ans-sbert"></div>
+                    <div class="metric-sub">ASR vs ground truth · threshold ≤0.60</div>
+                </div>
+            </div>
 
-    </div>
+        </div><!-- end answer-panel -->
+    </div><!-- end eval-layout -->
 </div>
 
 <script src="survey/self_eval_samples.js"></script>
@@ -465,8 +468,8 @@
     const baseURL = "https://raw.githubusercontent.com/Vorgesetzter/StyleTTS2/main/";
 
     let currentFilter = 'all';
-    let filteredIndices = [];   // indices into selfEvalSamples
-    let currentPos = 0;         // position within filteredIndices
+    let filteredIndices = [];
+    let currentPos = 0;
     let revealed = false;
 
     // -----------------------------------------------------------------------
@@ -525,7 +528,6 @@
         loadSampleAtPos(currentPos);
     }
 
-    // Called by the <select> onchange
     function loadSample(pos) {
         currentPos = pos;
         loadSampleAtPos(pos);
@@ -538,7 +540,7 @@
         const si = filteredIndices[pos];
         const s  = selfEvalSamples[si];
 
-        // Title & badge — evaluated fresh from metric values
+        // Title & badge
         document.getElementById('card-title').textContent = s.label;
         const badge = document.getElementById('success-badge');
         const ok = attackSuccess(s);
@@ -553,9 +555,11 @@
         document.getElementById('transcription').value = '';
         document.querySelectorAll('input[name="mos"]').forEach(r => r.checked = false);
 
-        // Hide answer
+        // Collapse answer panel
         revealed = false;
         document.getElementById('answer-panel').classList.remove('revealed');
+        document.getElementById('eval-layout').classList.remove('revealed');
+        document.body.classList.remove('wide');
         document.getElementById('reveal-btn').textContent = 'Reveal Answer';
 
         // Fill answer fields with checkword highlighting
@@ -563,13 +567,12 @@
         document.getElementById('ans-asr').innerHTML = highlightText(s.asr_transcription, s.ground_truth_text);
 
         setMetric('ans-utmos-best', s.utmos_best.toFixed(4), s.utmos_best >= 3.5);
-        setMetric('ans-pesq',       s.pesq.toFixed(4),        s.pesq <= 0.20);
+        setMetric('ans-pesq',       s.pesq.toFixed(4),       s.pesq <= 0.20);
         setMetric('ans-overlap',    s.set_overlap.toFixed(2), s.set_overlap <= 0.50);
         setMetric('ans-sbert',      s.semantic_similarity.toFixed(4), s.semantic_similarity <= 0.60);
 
         // Counter & nav buttons
-        document.getElementById('sample-counter').textContent =
-            `${pos + 1} / ${filteredIndices.length}`;
+        document.getElementById('sample-counter').textContent = `${pos + 1} / ${filteredIndices.length}`;
         document.getElementById('prev-btn').disabled = (pos === 0);
         document.getElementById('next-btn').disabled = (pos === filteredIndices.length - 1);
 
@@ -592,8 +595,8 @@
         'above','below','between','out','off','over','under','again','then',
         'there','here','about','also','than','such','even','though','although',
         'while','because','since','until','whether','whose','whom','s','t',
-        'its','it\'s','don\'t','doesn\'t','didn\'t','won\'t','can\'t',
-        'couldn\'t','shouldn\'t','aren\'t','isn\'t','wasn\'t','weren\'t'
+        'its',"it's","don't","doesn't","didn't","won't","can't",
+        "couldn't","shouldn't","aren't","isn't","wasn't","weren't"
     ]);
 
     function isContentWord(w) {
@@ -601,7 +604,6 @@
     }
 
     function tokenize(text) {
-        // Split into word tokens and non-word tokens (punctuation/spaces)
         return text.split(/(\s+|[^\w']+)/).filter(t => t.length > 0);
     }
 
@@ -644,7 +646,6 @@
         const r = normalize(ref);
         const h = normalize(hyp);
         if (r.length === 0) return hyp.trim().length === 0 ? 0 : 1;
-        // Levenshtein distance at character level
         const m = r.length, n = h.length;
         const dp = Array.from({length: m + 1}, (_, i) => Array.from({length: n + 1}, (_, j) => i === 0 ? j : j === 0 ? i : 0));
         for (let i = 1; i <= m; i++)
@@ -655,18 +656,16 @@
         return dp[m][n] / m;
     }
 
-    // CER threshold: mean(CER_GT) + 1σ = 0.0552 + 0.1090 = 0.1642
     const CER_THRESHOLD = 0.1642;
 
     function cerColorClass(v) {
-        if (v <= CER_THRESHOLD) return 'cer-good';
-        if (v <= 0.40)          return 'cer-medium';
-        return 'cer-bad';
+        return v <= CER_THRESHOLD ? 'cer-good' : 'cer-bad';
     }
 
     function cerLabel(v) {
-        if (v <= CER_THRESHOLD) return `≤ threshold (${(CER_THRESHOLD*100).toFixed(1)}%)`;
-        return `> threshold (${(CER_THRESHOLD*100).toFixed(1)}%)`;
+        return v <= CER_THRESHOLD
+            ? `≤ threshold (${(CER_THRESHOLD*100).toFixed(1)}%)`
+            : `> threshold (${(CER_THRESHOLD*100).toFixed(1)}%)`;
     }
 
     function renderCER() {
@@ -680,11 +679,10 @@
             return;
         }
 
-        const cerGT  = cer(s.ground_truth_text, userText);
-        const cerASR = cer(s.asr_transcription, userText);
+        const cerGT = cer(s.ground_truth_text, userText);
 
         block.innerHTML = `
-            <div class="answer-box full-width" style="margin-bottom:16px;">
+            <div class="answer-box full-width" style="margin-bottom:12px;">
                 <div class="label">Your CER vs Ground Truth · threshold: ${(CER_THRESHOLD*100).toFixed(1)}% (mean + 1σ)
                     <span class="info-icon" onclick="this.classList.toggle('open')">i
                         <span class="tooltip">Character Error Rate: Levenshtein edit distance at character level divided by reference length (alphabet-only, lowercased). Threshold 16.42% = mean CER of GT recordings + 1 standard deviation. Above this threshold suggests the audio was hard to transcribe accurately.</span>
@@ -705,9 +703,11 @@
     function toggleReveal() {
         revealed = !revealed;
         document.getElementById('answer-panel').classList.toggle('revealed', revealed);
-        document.getElementById('reveal-btn').textContent =
-            revealed ? 'Hide Answer' : 'Reveal Answer';
+        document.getElementById('eval-layout').classList.toggle('revealed', revealed);
+        document.body.classList.toggle('wide', revealed);
+        document.getElementById('reveal-btn').textContent = revealed ? 'Hide Answer' : 'Reveal Answer';
         if (revealed) renderCER();
+        if (revealed) window.scrollTo(0, 0);
     }
 
     // -----------------------------------------------------------------------
@@ -715,7 +715,6 @@
     // -----------------------------------------------------------------------
     buildFilteredList();
     buildSelect();
-    // Start with a random sample
     currentPos = Math.floor(Math.random() * filteredIndices.length);
     loadSampleAtPos(currentPos);
 </script>
