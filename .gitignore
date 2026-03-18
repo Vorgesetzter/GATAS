@@ -4,3 +4,10 @@ __pycache__
 self_evaluation/sentence_*/run_*/*
 !self_evaluation/sentence_*/run_*/best_mixed.wav
 !self_evaluation/sentence_*/run_*/ground_truth.wav
+
+outputs/*
+outputs_backup_20260311_0214/*
+Audio/*
+Scripts/Testing/*
+Scripts/Analysis/Testing/*
+testing/*

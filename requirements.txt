@@ -8,6 +8,9 @@ ipywidgets
 jiwer
 librosa
 matplotlib
+matplotlib-venn
+seaborn
+upsetplot
 munch
 nltk
 numpy>=1.26.0
