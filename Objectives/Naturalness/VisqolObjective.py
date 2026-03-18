@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import torch
-import torchaudio.functional as F
 from Objectives.base.BaseObjective import BaseObjective
 from Datastructures.dataclass import ObjectiveContext
 
@@ -51,22 +50,13 @@ class VisqolObjective(BaseObjective):
         """
         audio_mixed = context.audio_mixed_batch
 
-        # --- 1. Lazy-cache ground truth at 16 kHz ---
+        # --- 1. Lazy-cache ground truth (audio already at 16 kHz) ---
         if self.cached_gt_16k is None:
-            gt_tensor = torch.as_tensor(self.audio_gt, device='cpu', dtype=torch.float32)
-            if gt_tensor.dim() == 1:
-                gt_tensor = gt_tensor.unsqueeze(0)
-            resampled = F.resample(gt_tensor, orig_freq=24000, new_freq=16000)
             # ViSQOL requires float64
-            self.cached_gt_16k = resampled.squeeze().numpy().astype(np.float64)
+            self.cached_gt_16k = self.audio_gt.squeeze().cpu().numpy().astype(np.float64)
 
-        # --- 2. Resample candidate audio to 16 kHz ---
-        audio_tensor = torch.as_tensor(audio_mixed, device=self.device, dtype=torch.float32)
-        if audio_tensor.dim() == 1:
-            audio_tensor = audio_tensor.unsqueeze(0)
-        with torch.no_grad():
-            resampled = F.resample(audio_tensor, orig_freq=24000, new_freq=16000)
-        audio_np = resampled.squeeze().cpu().numpy().astype(np.float64)
+        # --- 2. Candidate audio (already at 16 kHz) ---
+        audio_np = audio_mixed.squeeze().cpu().numpy().astype(np.float64)
 
         # --- 3. Run ViSQOL ---
         try:

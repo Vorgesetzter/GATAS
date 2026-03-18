@@ -106,10 +106,13 @@ def main():
         p_refined, elapsed = run_attack(reference_audio, sentence_text, sentence_dir)
 
         # Synthesize adversarial audio from the refined prosody vector
+        # ETTS (WaveGlow) outputs at 22050 Hz — resample to 16 kHz for consistency
+        import librosa
         audio_numpy = audio_synthesis(p_refined.reshape(-1, 32), reference_audio, sentence_text)
+        audio_16k = librosa.resample(audio_numpy.astype('float32'), orig_sr=22050, target_sr=16000)
         adv_path = os.path.join(sentence_dir, 'best_smack.wav')
         gt_dst    = os.path.join(sentence_dir, 'ground_truth.wav')
-        sf.write(adv_path, audio_numpy, 22050)
+        sf.write(adv_path, audio_16k, 16000)
 
         import shutil
         shutil.copy(reference_audio, gt_dst)

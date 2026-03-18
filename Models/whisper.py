@@ -28,9 +28,8 @@ class Whisper:
             torch.use_deterministic_algorithms(True)
 
         try:
-            # 2. Prepare audio tensors (single conversion from numpy)
-            audio_tensor_asr = torchaudio_functional.resample(audio_batch, 22050, 16000)
-            audio_tensor_asr = whisper.pad_or_trim(audio_tensor_asr)
+            # 2. Prepare audio tensors — already at 16 kHz (StyleTTS2 resamples internally)
+            audio_tensor_asr = whisper.pad_or_trim(audio_batch)
 
             # 3. Create Mel spectrogram
             mel_batch = whisper.log_mel_spectrogram(audio_tensor_asr, n_mels=self.model.dims.n_mels).to(self.device)

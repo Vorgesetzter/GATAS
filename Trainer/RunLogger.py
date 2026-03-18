@@ -91,9 +91,9 @@ class RunLogger:
         self._squim_model = SQUIM_SUBJECTIVE.get_model().to(device)
         self._squim_model.eval()
 
-    def _compute_mos(self, audio, ref_audio, src_sr: int = 24000) -> float:
-        """Returns predicted MOS [1, 5] using ref_audio as the clean reference."""
-        import torchaudio.functional as AF
+    def _compute_mos(self, audio, ref_audio) -> float:
+        """Returns predicted MOS [1, 5] using ref_audio as the clean reference.
+        Audio is expected at 16 kHz (StyleTTS2 resamples internally)."""
 
         def prepare(a):
             t = torch.as_tensor(a, dtype=torch.float32, device=self.device)
@@ -101,8 +101,6 @@ class RunLogger:
                 t = t.unsqueeze(0)
             if t.requires_grad:
                 t = t.detach()
-            if src_sr != 16000:
-                t = AF.resample(t, src_sr, 16000)
             return t
 
         with torch.no_grad():
@@ -149,9 +147,8 @@ class RunLogger:
             elif audio_tensor.dim() == 3:
                 audio_tensor = audio_tensor.squeeze(1)
 
-            # Resample to 16kHz (Whisper's sample rate)
-            import torchaudio.functional as F
-            audio_16k = F.resample(audio_tensor, 24000, 16000)
+            # Audio is already at 16 kHz (StyleTTS2 resamples internally)
+            audio_16k = audio_tensor
 
             # Generate mel spectrogram using Whisper's function WITHOUT padding
             # This uses Whisper's parameters: n_fft=400, hop_length=160, n_mels=80

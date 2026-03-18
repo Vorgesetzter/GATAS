@@ -11,9 +11,12 @@ from text_utils import TextCleaner
 from Utils.PLBERT.util import load_plbert
 from Modules.diffusion.sampler import DiffusionSampler, ADPM2Sampler, KarrasSchedule
 
+import torchaudio.functional as _AF
 from Datastructures.dataclass import AudioEmbeddingData
 
 class StyleTTS2:
+
+    SAMPLE_RATE = 16000  # All inference outputs are resampled to 16 kHz for consistency
 
     def __init__(self, config_path="Audio/LJSpeech/config.yml", checkpoint_path="Audio/LJSpeech/epoch_2nd_00100.pth", device=None):
 
@@ -217,7 +220,10 @@ class StyleTTS2:
             audio_embedding_data.style_vector_prosodic
         )
 
-        return out.squeeze(1)
+        # Resample from native 24 kHz to 16 kHz so all outputs are consistent
+        # with Whisper, PESQ, UTMOS, and the other baselines (SMACK at 22050 Hz, PGD at 16 kHz).
+        audio = _AF.resample(out.squeeze(1), 24000, self.SAMPLE_RATE)
+        return audio
 
     @torch.no_grad()
     def inference(self, text: str, noise: Tensor, embedding_scale=1, diffusion_steps=5):

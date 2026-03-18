@@ -82,7 +82,7 @@ def send_whatsapp_notification():
 def save_audio(audio, file_path):
     if isinstance(audio, torch.Tensor):
         audio = audio.detach().cpu().numpy().squeeze()
-    sf.write(file_path, audio, samplerate=24000)
+    sf.write(file_path, audio, samplerate=16000)
 
 
 

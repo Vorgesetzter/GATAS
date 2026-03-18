@@ -61,8 +61,8 @@ def transcribe(audio_path, model_type, args=None):
     if model_type == 'whisper':
         whisper_model = load_whisper()
 
-        # Load audio at 24kHz (Whisper.inference() resamples to 16kHz internally)
-        audio_array, _ = librosa.load(audio_path, sr=24000)
+        # Load audio at 16 kHz (Whisper.inference() expects 16 kHz)
+        audio_array, _ = librosa.load(audio_path, sr=16000)
         audio_tensor = torch.from_numpy(audio_array).unsqueeze(0)
 
         asr_texts, _ = whisper_model.inference(audio_tensor)

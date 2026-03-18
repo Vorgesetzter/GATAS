@@ -1,6 +1,6 @@
 """
 Generate reference audio files for Harvard sentences using StyleTTS2.
-Outputs are saved at 16 kHz (resampled from StyleTTS2's native 24 kHz).
+Outputs are saved at 16 kHz (StyleTTS2 resamples internally in inference_on_embedding).
 
 Run from project root in the styletts2 conda environment:
     python Scripts/Adversarial/generate_harvard_audios.py --start 1 --end 100
@@ -12,7 +12,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import argparse
-import librosa
 import soundfile as sf
 
 from Datastructures.harvard_sentences import HARVARD_SENTENCES
@@ -57,11 +56,10 @@ def main():
 
         noise = torch.randn(1, 1, 256).to(device)
         embeddings = tts_model.extract_embeddings(tts_model.preprocess_text(sentence_text), noise)
-        audio_tensor = tts_model.inference_on_embedding(embeddings).flatten()
-        audio_numpy = audio_tensor.cpu().detach().numpy()
+        # inference_on_embedding already resamples to 16 kHz internally
+        audio_numpy = tts_model.inference_on_embedding(embeddings).flatten().cpu().detach().numpy()
 
-        audio_16k = librosa.resample(audio_numpy, orig_sr=24000, target_sr=16000)
-        sf.write(output_path, audio_16k, 16000)
+        sf.write(output_path, audio_numpy, 16000)
         torch.save(embeddings, embeddings_path)
 
         print(f"[{sentence_id:3d}] Saved: {output_path}  |  {sentence_text}")
