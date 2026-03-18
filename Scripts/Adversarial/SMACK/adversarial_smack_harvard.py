@@ -38,7 +38,7 @@ GENETIC_ITERATIONS = 82
 GRADIENT_ITERATIONS = 41
 TARGET_MODEL = 'whisperASR'
 
-AUDIO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'HarvardAudios')
+AUDIO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'HarvardAudios')
 
 
 def run_attack(reference_audio: str, reference_text: str, output_dir: str):

@@ -67,6 +67,8 @@ def initialize_parser():
     parser.add_argument("--gcs_bucket", type=str, default="thesis-data-2026")
     parser.add_argument("--gcs_prefix", type=str, default="outputs")
     parser.add_argument("--upload_gcs", action="store_true", default=False)
+    parser.add_argument("--audio_dir", type=str, default="Scripts/Adversarial/HarvardAudios",
+                        help='Directory containing pre-generated harvard_audio_N.wav and .pt files')
     return parser
 
 
@@ -132,9 +134,11 @@ def main():
                 )
                 config_data = loader.load_configuration(run_args)
 
+                embeddings_path = os.path.join(args.audio_dir, f'harvard_audio_{sentence_id}.pt')
                 audio_gt, audio_target, audio_embedding_gt, audio_embedding_target, gt_rms, target_rms = loader.generate_audio_data(
                     config_data.mode, config_data.text_gt, config_data.text_target, tts_model,
                     num_rms_candidates=config_data.num_rms_candidates,
+                    embeddings_path=embeddings_path if os.path.exists(embeddings_path) else None,
                 )
 
                 objectives_dict = loader.initialize_objectives(

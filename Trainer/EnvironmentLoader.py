@@ -179,11 +179,13 @@ class EnvironmentLoader:
 
         return tts, asr
 
-    def generate_audio_data(self, mode: AttackMode, text_gt: str, text_target: str, tts: StyleTTS2, num_rms_candidates: int = 20):
+    def generate_audio_data(self, mode: AttackMode, text_gt: str, text_target: str, tts: StyleTTS2, num_rms_candidates: int = 20, embeddings_path: str = None):
         """Generate audio data for ground-truth and target texts."""
-        noise = torch.randn(1, 1, 256).to(self.device)
-
-        audio_embedding_data_gt = tts.extract_embeddings(tts.preprocess_text(text_gt), noise)
+        if embeddings_path is not None:
+            audio_embedding_data_gt = torch.load(embeddings_path, map_location=self.device, weights_only=False)
+        else:
+            noise = torch.randn(1, 1, 256).to(self.device)
+            audio_embedding_data_gt = tts.extract_embeddings(tts.preprocess_text(text_gt), noise)
 
         if mode is AttackMode.TARGETED:
             tokens_gt, tokens_target = add_numbers_pattern(

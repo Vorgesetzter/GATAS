@@ -5,7 +5,7 @@
 source ~/miniconda3/etc/profile.d/conda.sh
 
 conda activate styletts2
-python Scripts/Adversarial/SMACK/generate_harvard_audios.py --start 1 --end 100
+python Scripts/Adversarial/generate_harvard_audios.py --start 1 --end 100
 
 conda activate smack
 cd SMACK
