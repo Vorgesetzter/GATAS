@@ -57,7 +57,7 @@ def run_attack(reference_audio: str, reference_text: str, output_dir: str):
 
     gradient_estimator = GradientEstimation(
         reference_audio, reference_text, TARGET_MODEL,
-        sigma=0.1, learning_rate=0.01, K=20
+        sigma=0.1, learning_rate=0.01, K=POPULATION_SIZE
     )
     p_refined = gradient_estimator.refine_prosody_vector(fittest_individual, GRADIENT_ITERATIONS)
 
