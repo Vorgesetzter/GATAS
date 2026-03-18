@@ -18,6 +18,7 @@ import sys
 import time
 import argparse
 import datetime
+import soundfile as sf
 from pathlib import Path
 
 # Add project root for Datastructures, and SMACK dir for genetic/gradient
@@ -31,6 +32,8 @@ if smack_dir not in sys.path:
 from Datastructures.harvard_sentences import HARVARD_SENTENCES
 from genetic import GeneticAlgorithm
 from gradient import GradientEstimation
+from synthesis import audio_synthesis
+from Trainer.AttackSummary import compute_attack_summary
 
 
 POPULATION_SIZE = 163
@@ -64,7 +67,7 @@ def run_attack(reference_audio: str, reference_text: str, output_dir: str):
     seconds = elapsed % 60
     print(f"Attack finished. Time: {hours}h {minutes}m {seconds:.2f}s\n")
 
-    return p_refined
+    return p_refined, elapsed
 
 
 def main():
@@ -98,7 +101,30 @@ def main():
         print('=' * 60)
 
         sentence_dir = os.path.join(output_base, f'sentence_{sentence_id:03d}')
-        run_attack(reference_audio, sentence_text, sentence_dir)
+        os.makedirs(sentence_dir, exist_ok=True)
+
+        p_refined, elapsed = run_attack(reference_audio, sentence_text, sentence_dir)
+
+        # Synthesize adversarial audio from the refined prosody vector
+        audio_numpy = audio_synthesis(p_refined.reshape(-1, 32), reference_audio, sentence_text)
+        adv_path = os.path.join(sentence_dir, 'best_smack.wav')
+        gt_dst    = os.path.join(sentence_dir, 'ground_truth.wav')
+        sf.write(adv_path, audio_numpy, 22050)
+
+        import shutil
+        shutil.copy(reference_audio, gt_dst)
+
+        compute_attack_summary(
+            adversarial_audio_path=adv_path,
+            gt_audio_path=gt_dst,
+            gt_text=sentence_text,
+            attack_method='SMACK',
+            num_generations=GENETIC_ITERATIONS + GRADIENT_ITERATIONS,
+            pop_size=POPULATION_SIZE,
+            elapsed_time_seconds=elapsed,
+            output_path=os.path.join(sentence_dir, 'smack_summary.json'),
+            sentence_id=sentence_id,
+        )
 
     print("\n[Done]")
 

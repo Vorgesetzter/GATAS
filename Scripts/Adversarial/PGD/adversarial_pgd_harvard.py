@@ -25,6 +25,7 @@ project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from Datastructures.harvard_sentences import HARVARD_SENTENCES
+from Trainer.AttackSummary import compute_attack_summary
 
 
 NB_ITER = 200
@@ -73,7 +74,7 @@ def run_pgd_attack(output_dir):
     subprocess.run(cmd, cwd=WHISPER_ATTACK_DIR, check=True)
 
 
-def organize_outputs(sentence_ids, output_dir):
+def organize_outputs(sentence_ids, output_dir, elapsed_time_seconds=None, n_sentences=1):
     save_path = os.path.join(
         output_dir, 'attacks', 'pgd_harvard',
         f'whisper-{MODEL_LABEL}-{SNR}', str(SEED), 'save'
@@ -91,21 +92,29 @@ def organize_outputs(sentence_ids, output_dir):
         sentence_dir = os.path.join(output_dir, f'sentence_{sid:03d}')
         os.makedirs(sentence_dir, exist_ok=True)
 
-        shutil.copy(adv_src, os.path.join(sentence_dir, 'best_pgd.wav'))
-        shutil.copy(gt_src, os.path.join(sentence_dir, 'ground_truth.wav'))
+        adv_dst = os.path.join(sentence_dir, 'best_pgd.wav')
+        gt_dst  = os.path.join(sentence_dir, 'ground_truth.wav')
+        shutil.copy(adv_src, adv_dst)
+        shutil.copy(gt_src,  gt_dst)
 
-        summary = {
-            'sentence_id': sid,
-            'sentence_text': HARVARD_SENTENCES[sid - 1],
-            'attack_method': 'PGD',
-            'model': f'whisper-{MODEL_LABEL}',
-            'snr': SNR,
-            'nb_iter': NB_ITER,
-            'seed': SEED,
-            'timestamp': timestamp,
-        }
-        with open(os.path.join(sentence_dir, 'pgd_summary.json'), 'w') as f:
-            json.dump(summary, f, indent=2)
+        sentence_elapsed = elapsed_time_seconds / n_sentences if elapsed_time_seconds else None
+        compute_attack_summary(
+            adversarial_audio_path=adv_dst,
+            gt_audio_path=gt_dst,
+            gt_text=HARVARD_SENTENCES[sid - 1],
+            attack_method='PGD',
+            num_generations=NB_ITER,
+            pop_size=1,  # PGD is gradient-based, no population
+            elapsed_time_seconds=sentence_elapsed or 0.0,
+            output_path=os.path.join(sentence_dir, 'pgd_summary.json'),
+            sentence_id=sid,
+            extra={
+                'model': f'whisper-{MODEL_LABEL}',
+                'snr': SNR,
+                'seed': SEED,
+                'timestamp': timestamp,
+            },
+        )
 
         print(f"[{sid:3d}] Saved to {sentence_dir}")
 
@@ -129,9 +138,12 @@ def main():
     csv_path = create_csv(sentence_ids, output_dir)
     print(f"CSV created: {csv_path}\n")
 
+    import time
+    t0 = time.time()
     run_pgd_attack(output_dir)
+    elapsed = time.time() - t0
 
-    organize_outputs(sentence_ids, output_dir)
+    organize_outputs(sentence_ids, output_dir, elapsed_time_seconds=elapsed, n_sentences=len(sentence_ids))
     print('\n[Done]')
 
 

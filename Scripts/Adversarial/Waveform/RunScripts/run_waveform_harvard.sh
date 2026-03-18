@@ -1,10 +1,15 @@
 #!/bin/bash
 # Run adversarial waveform attack on Harvard sentences 1–100 (1 run per sentence)
-# Run from project root: bash Scripts/Adversarial/RunScripts/run_waveform_harvard.sh
+# Run from project root: bash Scripts/Adversarial/Waveform/RunScripts/run_waveform_harvard.sh
 
-python Scripts/Adversarial/adversarial_waveform_harvard.py \
-    --sentence_start 1 \
-    --sentence_end 100 \
+START=1
+END=100
+
+python Scripts/Adversarial/generate_harvard_audios.py --start $START --end $END
+
+python Scripts/Adversarial/Waveform/adversarial_waveform_harvard.py \
+    --sentence_start $START \
+    --sentence_end $END \
     --loop_count 1 \
     --num_generations 100 \
     --pop_size 200 \

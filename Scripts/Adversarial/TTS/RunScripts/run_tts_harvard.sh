@@ -1,10 +1,15 @@
 #!/bin/bash
 # Run adversarial TTS attack on Harvard sentences 1–100 (1 run per sentence)
-# Run from project root: bash Scripts/Adversarial/RunScripts/run_tts_harvard.sh
+# Run from project root: bash Scripts/Adversarial/TTS/RunScripts/run_tts_harvard.sh
 
-python Scripts/Adversarial/adversarial_tts_harvard.py \
-    --harvard_sentences_start 1 \
-    --harvard_sentences_end 100 \
+START=1
+END=100
+
+python Scripts/Adversarial/generate_harvard_audios.py --start $START --end $END
+
+python Scripts/Adversarial/TTS/adversarial_tts_harvard.py \
+    --harvard_sentences_start $START \
+    --harvard_sentences_end $END \
     --loop_count 1 \
     --num_generations 100 \
     --pop_size 200 \
