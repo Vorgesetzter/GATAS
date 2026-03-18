@@ -3,6 +3,14 @@ import torch
 import string
 import torchaudio.functional as torchaudio_functional
 
+
+def load_whisper_model(model_name="tiny", device=None):
+    """Load a Whisper model for SMACK framework."""
+    if device is None:
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    return Whisper(device=device)
+
+
 class Whisper:
     def __init__(self, device=None):
         self.device = device if device else ('cuda' if torch.cuda.is_available() else 'cpu')

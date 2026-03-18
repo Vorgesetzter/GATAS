@@ -46,8 +46,16 @@ class ETTSInferenceModel:
         waveglow = torch.load(vocoder_ckpt_path)['model']
         self.vocoder = waveglow.remove_weightnorm(waveglow).eval()
         self.model.eval()
-        self.model.cuda()
-        self.vocoder.cuda()
+        # Use CPU if CUDA is not available or incompatible
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        try:
+            self.model.cuda()
+            self.vocoder.cuda()
+        except (RuntimeError, Exception):
+            print("CUDA unavailable, using CPU")
+            self.model = self.model.cpu()
+            self.vocoder = self.vocoder.cpu()
+            self.device = torch.device("cpu")
         self.emo_model.freeze()
         self.emo_model.eval()
         self.emo_model.cuda()

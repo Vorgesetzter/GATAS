@@ -13,9 +13,6 @@ from synthesis import audio_synthesis
 from google_ASR import google_ASR
 from iflytek_ASR import iflytek_ASR
 from whisper_ASR import whisper_ASR
-from speaker_sv import speaker_verification_gmm, speaker_verification_iv
-from speaker_csi import gmm_ubm_csi, iv_plda_csi
-from speaker_osi import gmm_ubm_osi, iv_plda_osi
 
 
 class GeneticAlgorithm():

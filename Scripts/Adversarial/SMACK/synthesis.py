@@ -25,8 +25,8 @@ model_syn = ETTSInferenceModel(text_embed_dim=256,
 
 
 def audio_synthesis(l_emo_numpy, reference_audio, reference_text):
-    
-    device = torch.device("cuda:0")
+
+    device = model_syn.device
     
     # Set global style references
     global_audio = reference_audio

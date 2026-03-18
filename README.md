@@ -21,6 +21,36 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 ```
 4. Download the pretrained StyleTTS 2 on LJSpeech corpus in 24 kHz from [https://huggingface.co/yl4579/StyleTTS2-LJSpeech/tree/main](https://huggingface.co/yl4579/StyleTTS2-LJSpeech/tree/main).
 
+### SMACK Framework Setup
+
+For adversarial attacks using the SMACK framework (Spoofing and Masking Attacks on speaker verification systems), follow these additional setup steps:
+
+1. Create the SMACK conda environment from the provided yml file:
+```bash
+conda env create -f Scripts/Adversarial/SMACK/smack.yml
+conda activate smack
+```
+
+2. **Important**: After environment creation, install `python-levenshtein` from conda-forge (required for edit distance calculations):
+```bash
+conda install -c conda-forge python-levenshtein
+```
+   > **Note**: The original pip installation of `python-levenshtein` from smack.yml will fail due to compiler compatibility issues with conda's libc. Installing from conda-forge uses pre-compiled binaries and avoids this issue.
+
+3. Upgrade transformers to fix cache mechanism bugs in the old version:
+```bash
+pip install --upgrade 'transformers>=4.18,<4.25'
+```
+
+4. Install openai-whisper for Whisper ASR support:
+```bash
+pip install openai-whisper
+```
+
+5. Download ETTS checkpoint files from `Downloads/Firefox/SMACK_Supplementary_Files.zip` and extract to `Scripts/Adversarial/SMACK/`:
+   - `LJ.ckpt` (ETTS model checkpoint)
+   - `waveglow_256channels_universal_v5.pt` (WaveGlow vocoder)
+
 
 ## Inference
 

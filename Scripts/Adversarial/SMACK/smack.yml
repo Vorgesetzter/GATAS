@@ -256,7 +256,6 @@ dependencies:
     - pyrsistent==0.18.0
     - pytest==6.2.5
     - python-etcd==0.4.5
-    - python-levenshtein==0.12.2
     - pytorch-lightning==1.1.0
     - pytz==2023.3
     - pyzmq==22.3.0
