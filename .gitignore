@@ -1,4 +1,6 @@
 __pycache__
+.idea/
+.vscode/
 
 # self_evaluation: keep only the two audio files per run, exclude spectrograms/CSVs/etc.
 self_evaluation/sentence_*/run_*/*
