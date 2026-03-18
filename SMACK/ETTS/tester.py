@@ -32,7 +32,7 @@ class ETTSInferenceModel:
                                      nlayers=nlayers, nheads=nheads)
         self.emo_model = MinimalClassifier()
         #Extract state dict
-        state_dict = torch.load(etts_checkpoint)['state_dict']
+        state_dict = torch.load(etts_checkpoint, weights_only=False)['state_dict']
         new_state_dict = dict()
         non_parameters = ['tgt_mask', 'pos_txt.p', 'pos_mel.p']
         for k, v in state_dict.items():
@@ -43,7 +43,7 @@ class ETTSInferenceModel:
         print (self.model.load_state_dict(new_state_dict, strict=False))
 
         sys.path.insert(0, 'waveglow') #For waveglow vocoder
-        waveglow = torch.load(vocoder_ckpt_path)['model']
+        waveglow = torch.load(vocoder_ckpt_path, weights_only=False)['model']
         self.vocoder = waveglow.remove_weightnorm(waveglow).eval()
         self.model.eval()
         # Use CPU if CUDA is not available or incompatible

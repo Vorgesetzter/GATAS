@@ -4,50 +4,31 @@
 
 
 ## Pre-requisites
-1. Python >= 3.7
+1. Python >= 3.9
 2. Clone this repository:
 ```bash
 git clone https://github.com/Vorgesetzter/StyleTTS2
 cd StyleTTS2
 ```
-3. Install python requirements:
+3. Create the conda environment:
 ```bash
-pip install -r requirements.txt
+conda env create -f styletts2.yml
+conda activate styletts2
 sudo apt-get install espeak-ng
 ```
-On Windows add:
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 -U
-```
-4. Download the pretrained StyleTTS 2 on LJSpeech corpus in 24 kHz from [https://huggingface.co/yl4579/StyleTTS2-LJSpeech/tree/main](https://huggingface.co/yl4579/StyleTTS2-LJSpeech/tree/main).
+4. Download the pretrained StyleTTS2 on LJSpeech corpus in 24 kHz from [https://huggingface.co/yl4579/StyleTTS2-LJSpeech/tree/main](https://huggingface.co/yl4579/StyleTTS2-LJSpeech/tree/main).
 
 ### SMACK Framework Setup
 
-For adversarial attacks using the SMACK framework (Spoofing and Masking Attacks on speaker verification systems), follow these additional setup steps:
+For adversarial attacks using the SMACK framework, follow these additional setup steps:
 
-1. Create the SMACK conda environment from the provided yml file:
+1. Create the SMACK conda environment:
 ```bash
-conda env create -f Scripts/Adversarial/SMACK/smack.yml
+conda env create -f SMACK/smack.yml
 conda activate smack
 ```
 
-2. **Important**: After environment creation, install `python-levenshtein` from conda-forge (required for edit distance calculations):
-```bash
-conda install -c conda-forge python-levenshtein
-```
-   > **Note**: The original pip installation of `python-levenshtein` from smack.yml will fail due to compiler compatibility issues with conda's libc. Installing from conda-forge uses pre-compiled binaries and avoids this issue.
-
-3. Upgrade transformers to fix cache mechanism bugs in the old version:
-```bash
-pip install --upgrade 'transformers>=4.18,<4.25'
-```
-
-4. Install openai-whisper for Whisper ASR support:
-```bash
-pip install openai-whisper
-```
-
-5. Download ETTS checkpoint files from `Downloads/Firefox/SMACK_Supplementary_Files.zip` and extract to `Scripts/Adversarial/SMACK/`:
+2. Download ETTS checkpoint files from `SMACK_Supplementary_Files.zip` and place in `SMACK/`:
    - `LJ.ckpt` (ETTS model checkpoint)
    - `waveglow_256channels_universal_v5.pt` (WaveGlow vocoder)
 
