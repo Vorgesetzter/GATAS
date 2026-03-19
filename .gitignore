@@ -13,8 +13,6 @@ Audio/*
 Scripts/Testing/*
 Scripts/Analysis/Testing/*
 testing/*
-Scripts/Adversarial/SMACK/google_token.json
-SMACK/google_token.json
 
 # SMACK pretrained models and sample data (from SMACK_Supplementary_Files.zip)
 SMACK/LJ.ckpt
