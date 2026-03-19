@@ -15,6 +15,7 @@ import os
 os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':16:8'
 
 import sys
+import json
 import time
 import argparse
 import datetime
@@ -33,7 +34,6 @@ from Datastructures.harvard_sentences import HARVARD_SENTENCES
 from genetic import GeneticAlgorithm
 from gradient import GradientEstimation
 from synthesis import audio_synthesis
-from Trainer.AttackSummary import compute_attack_summary
 
 
 POPULATION_SIZE = 163
@@ -117,17 +117,19 @@ def main():
         import shutil
         shutil.copy(reference_audio, gt_dst)
 
-        compute_attack_summary(
-            adversarial_audio_path=adv_path,
-            gt_audio_path=gt_dst,
-            gt_text=sentence_text,
-            attack_method='SMACK',
-            num_generations=GENETIC_ITERATIONS + GRADIENT_ITERATIONS,
-            pop_size=POPULATION_SIZE,
-            elapsed_time_seconds=elapsed,
-            output_path=os.path.join(sentence_dir, 'smack_summary.json'),
-            sentence_id=sentence_id,
-        )
+        with open(os.path.join(sentence_dir, 'attack_metadata.json'), 'w') as f:
+            json.dump({
+                'attack_method': 'SMACK',
+                'sentence_id': sentence_id,
+                'gt_text': sentence_text,
+                'adversarial_audio': 'best_smack.wav',
+                'num_generations': GENETIC_ITERATIONS + GRADIENT_ITERATIONS,
+                'pop_size': POPULATION_SIZE,
+                'elapsed_time_seconds': round(elapsed, 2),
+            }, f, indent=2)
+
+    with open('/tmp/smack_last_output.txt', 'w') as f:
+        f.write(output_base)
 
     print("\n[Done]")
 

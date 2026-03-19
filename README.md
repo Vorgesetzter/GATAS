@@ -28,7 +28,7 @@ conda env create -f SMACK/smack.yml
 conda activate smack
 ```
 
-2. Download ETTS checkpoint files from `SMACK_Supplementary_Files.zip` and place in `SMACK/`:
+2. Download ETTS checkpoint files from [`SMACK_Supplementary_Files.zip`](https://drive.google.com/file/d/12vUxRaIRDaD_prg8F-vpb5oUvWMOPqsl/view?usp=sharing) and place in `SMACK/`:
    - `LJ.ckpt` (ETTS model checkpoint)
    - `waveglow_256channels_universal_v5.pt` (WaveGlow vocoder)
 

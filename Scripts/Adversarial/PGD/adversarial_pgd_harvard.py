@@ -25,7 +25,6 @@ project_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from Datastructures.harvard_sentences import HARVARD_SENTENCES
-from Trainer.AttackSummary import compute_attack_summary
 
 
 NB_ITER = 200
@@ -98,23 +97,22 @@ def organize_outputs(sentence_ids, output_dir, elapsed_time_seconds=None, n_sent
         shutil.copy(gt_src,  gt_dst)
 
         sentence_elapsed = elapsed_time_seconds / n_sentences if elapsed_time_seconds else None
-        compute_attack_summary(
-            adversarial_audio_path=adv_dst,
-            gt_audio_path=gt_dst,
-            gt_text=HARVARD_SENTENCES[sid - 1],
-            attack_method='PGD',
-            num_generations=NB_ITER,
-            pop_size=1,  # PGD is gradient-based, no population
-            elapsed_time_seconds=sentence_elapsed or 0.0,
-            output_path=os.path.join(sentence_dir, 'pgd_summary.json'),
-            sentence_id=sid,
-            extra={
-                'model': f'whisper-{MODEL_LABEL}',
-                'snr': SNR,
-                'seed': SEED,
-                'timestamp': timestamp,
-            },
-        )
+        with open(os.path.join(sentence_dir, 'attack_metadata.json'), 'w') as f:
+            json.dump({
+                'attack_method': 'PGD',
+                'sentence_id': sid,
+                'gt_text': HARVARD_SENTENCES[sid - 1],
+                'adversarial_audio': 'best_pgd.wav',
+                'num_generations': NB_ITER,
+                'pop_size': 1,
+                'elapsed_time_seconds': round(sentence_elapsed or 0.0, 2),
+                'extra': {
+                    'model': f'whisper-{MODEL_LABEL}',
+                    'snr': SNR,
+                    'seed': SEED,
+                    'timestamp': timestamp,
+                },
+            }, f, indent=2)
 
         print(f"[{sid:3d}] Saved to {sentence_dir}")
 
@@ -144,6 +142,10 @@ def main():
     elapsed = time.time() - t0
 
     organize_outputs(sentence_ids, output_dir, elapsed_time_seconds=elapsed, n_sentences=len(sentence_ids))
+
+    with open('/tmp/pgd_last_output.txt', 'w') as f:
+        f.write(output_dir)
+
     print('\n[Done]')
 
 
