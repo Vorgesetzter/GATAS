@@ -18,4 +18,5 @@ testing/*
 SMACK/LJ.ckpt
 SMACK/waveglow_256channels_universal_v5.pt
 SMACK/Original_*.wav
-SMACK/SampleDir/
+SMACK/SampleDir/*
+!SMACK/SampleDir/.gitignore
