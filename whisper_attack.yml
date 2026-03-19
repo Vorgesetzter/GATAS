@@ -42,7 +42,7 @@ dependencies:
       - anyio==4.12.1
       - async-timeout==5.0.1
       - attrs==25.4.0
-      - audlib==0.0.3.3
+      - git+https://github.com/RaphaelOlivier/pyaudlib.git
       - certifi==2026.2.25
       - cffi==2.0.0
       - charset-normalizer==3.4.6
@@ -99,7 +99,7 @@ dependencies:
       - regex==2026.1.15
       - requests==2.32.5
       - resampy==0.4.3
-      - robust-speech==0.3.1
+      - git+https://github.com/RaphaelOlivier/robust_speech.git
       - ruamel-yaml==0.18.17
       - ruamel-yaml-clib==0.2.15
       - safetensors==0.7.0
@@ -107,7 +107,7 @@ dependencies:
       - sentencepiece==0.2.1
       - six==1.17.0
       - soundfile==0.13.1
-      - speechbrain==0.5.13
+      - git+https://github.com/RaphaelOlivier/speechbrain.git
       - sympy==1.14.0
       - tiktoken==0.12.0
       - tokenizers==0.22.2
@@ -122,4 +122,3 @@ dependencies:
       - xxhash==3.6.0
       - yarl==1.22.0
       - zipp==3.23.0
-prefix: /home/yanis/miniconda3/envs/whisper_attack

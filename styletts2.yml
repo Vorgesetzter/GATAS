@@ -365,4 +365,3 @@ dependencies:
       - wrapt==2.0.1
       - yarl==1.20.1
       - zipp==3.23.0
-prefix: /home/yanis/miniconda3/envs/styletts2

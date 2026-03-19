@@ -313,4 +313,3 @@ dependencies:
       - widgetsnbextension==3.5.2
       - zope-event==4.6
       - zope-interface==6.0
-prefix: /home/yanis/miniconda3/envs/smack
