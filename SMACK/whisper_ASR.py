@@ -11,16 +11,18 @@ if str(project_root) not in sys.path:
 from Models.whisper import load_whisper_model
 
 
-def whisper_ASR(audio_file):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = load_whisper_model("base", device=device)
+# Load once at module import time — reloading on every call was the bottleneck
+_device = "cuda" if torch.cuda.is_available() else "cpu"
+_model = load_whisper_model("base", device=_device)
 
+
+def whisper_ASR(audio_file):
     # Load audio at native sample rate
     audio, sr = librosa.load(audio_file, sr=None)
     audio_tensor = torch.from_numpy(audio).float()
 
     # Call inference method (handles resampling internally)
-    clean_texts, _ = model.inference(audio_tensor)
+    clean_texts, _ = _model.inference(audio_tensor)
 
     text = clean_texts[0].upper() if clean_texts else ""
 
